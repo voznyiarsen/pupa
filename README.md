@@ -1,0 +1,2 @@
+# pupa
+Aware minecraft bot
