@@ -1,11 +1,53 @@
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const pvp = require('mineflayer-pvp').plugin;
 
-bot.loadPlugin(pathfinder);
-bot.loadPlugin(pvp);
 
-let combatMode;
+module.exports = function attach(bot) {
+    bot.loadPlugin(pathfinder);
+    bot.loadPlugin(pvp);
 
+    class pupa_pvp {
+        constructor(bot) {
+            this.bot = bot;
+            this.mode = 0;
+            this.allies = [];
+        }
+        setMode(mode) {
+            this.mode++;
+            if (this.mode > 3) this.mode = 0;
+            if (mode) this.mode = mode;
+        }
+        getTargetFilter() {
+            switch (this.mode) {
+                case 0:
+                    return e => e.type === 'mob' &&
+                                e.kind === 'Hostile mobs' &&
+                                e.position.distanceTo(this.bot.entity.position) <= 128;
+                case 1: // verified SURVIVAL mode player no constraints
+                    return e => e.type === 'player' && 
+                                this.bot.players[e.username]?.gamemode === 0 &&
+                                !this.allies.includes(e.username) &&
+                                e.position.distanceTo(this.bot.entity.position) <= 128;
+                case 2: //
+                    return e => e.type === 'player' &&
+                                this.bot.players[e.username]?.gamemode === 0 && 
+                                !this.allies.includes(e.username) &&
+                                (isInCylinder([e.position.x, e.position.y, e.position.z], cylinder1) || 
+                                 isInCylinder([e.position.x, e.position.y, e.position.z], cylinder2)) &&
+                                e.position.distanceTo(this.bot.entity.position) < 128;
+                case 3:
+                    return e => e.type === 'player' && 
+                                e.username === (this.desired.username || this.allies[0]) &&
+                                e.position.distanceTo(this.bot.entity.position) <= 128;
+                default:
+                    return null;
+            }
+        }
+    }
+    bot.pupa_pvp = new pupa_pvp(bot)
+    return bot;
+}
+/*
 async function tossPearl() {
     const entity = bot.nearestEntity(e => e === bot.pvp.target && e.position.distanceTo(bot.entity.position) >= 10);
     const pearl = bot.inventory.findInventoryItem(bot.registry.itemsByName.ender_pearl.id, null);
@@ -26,41 +68,6 @@ async function tossPearl() {
     bot.activateItem(true);
     await bot.waitForTicks(1);
     bot.deactivateItem();
-}
-
-function setMode(mode) {
-  if (mode) {
-    combatMode = mode;
-  } else {
-    combatMode++ ;
-    if (combatMode > 4) combatMode = 0;
-  }
-}
-
-function filterTarget() {
-  switch (combatMode) {
-    case 0:
-      return e => e.type === 'mob' && e.position.distanceTo(bot.entity.position) <= 128 && e.kind === 'Hostile mobs';
-    case 1:
-      return e => e.type === 'player' && e.position.distanceTo(bot.entity.position) <= 128 && bot.players[e.username]?.gamemode === 0 && !allies.includes(e.username);
-    case 2:
-      return e => e.type === 'player' &&
-                  (isInCylinder([e.position.x, e.position.y, e.position.z], cylinder1) || 
-                   isInCylinder([e.position.x, e.position.y, e.position.z], cylinder2)) &&
-                  e.position.distanceTo(bot.entity.position) < 128 &&
-                  bot.players[e.username]?.gamemode === 0 && 
-                  !allies.includes(e.username);
-    case 3:
-      return e => e.type === 'player' && 
-                  e.position.distanceTo(bot.entity.position) <= 128 &&
-                  e.username === master;
-    case 4:
-      return e => e.type === 'player' &&
-                  e.position.distanceTo(bot.entity.position) <= 128 &&
-                  e.username === targetPlayer.username;
-    default:
-      return null;
-  }
 }
 
 function updateTarget() {
@@ -108,7 +115,7 @@ function combatLoop() {
 function strafeMovement() {
   if (!this.entity) return;
   // 1.5 strafe speed 0.6 distance max 
-  /* Get blocks near entities */
+   //Get blocks near entities 
   this.entityBlock = blocksNear(this.entity, 'web', 3, 1);
   this.botBlock = blocksNear(this.bot.entity, 'web', 2, 2);
   this.entityPos = [this.entity.position.x, this.entity.position.z];
@@ -140,4 +147,4 @@ function preventFall(e) {
   });
   // if blocks lower than bot and block 1 lower than 2 y and bloc 1 x eq bloc 2 x and z
   return (b[0].y < e.position.y && b[1].y < e.position.y && b[0].y < b[1].y && b[0].x === b[1].x && b[0].z === b[1].z);
-}
+}*/

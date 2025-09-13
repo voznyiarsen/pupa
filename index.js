@@ -3,18 +3,24 @@ require('dotenv').config()
 const mineflayer = require('mineflayer');
 const ui = require('./tui')();
 
+const pupa_inventory = require('./inventory');
+const pupa_pvp = require('./pvp');
+const pupa_commands = require('./commands');
+const pupa_utils = require('./utils');
+/*
 const { Inventory } = require('./inventory');
-//const { Pvp } = require('./pvp');
-// use as plugins instead
+const { Pvp } = require('./pvp');
+//use as plugins instead
 
 let pupa_inventory;
 let pupa_pvp;
+*/
 
 const config = {
-    host: process.env.PUPA_HOST,
-    port: process.env.PUPA_PORT,
-    username: process.env.PUPA_NAME,
-    version: process.env.PUPA_VERSION,
+    host: process.argv[2] || process.env.PUPA_HOST,
+    port: process.argv[3] || process.env.PUPA_PORT,
+    username: process.argv[4] || process.env.PUPA_NAME,
+    version: process.argv[5] || process.env.PUPA_VERSION,
     logErrors: false,
     hideErrors: false,
 }
@@ -28,9 +34,12 @@ function start_client() {
         ui.log("[Client] Successfully logged into account");
         module.exports = { bot };
         
+        pupa_inventory(bot);
+        pupa_pvp(bot);
+        pupa_commands(bot);
         // Module loading
         //require('./pvp');
-        pupa_inventory = new Inventory(bot);
+        //pupa_inventory = new Inventory(bot);
     });
       
     bot.on('kicked', (reason) =>  {
@@ -48,7 +57,7 @@ function start_client() {
 
     bot.on('chat', (message) => {
         switch (true) {
-            case value:
+            case message = 'gg':
                 
                 break;
         
@@ -60,9 +69,12 @@ function start_client() {
 
 ui.onInput(text => {
     if (!text.match(/^\s?$/)) {
-        ui.log(`{green-fg}Sending:{/} ${text}`);
-        bot.chat(text);
-        pupa_inventory.tossAllItems();
+        if (bot.pupa_commands.exec(text)) {
+            ui.log(`[Command] Executing '${text}'`);
+        } else {
+            ui.log(`{green-fg}Sending:{/} "${text}"`);
+            bot.chat(text);
+        }
     }
 });
 
