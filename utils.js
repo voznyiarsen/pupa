@@ -1,3 +1,56 @@
+module.exports = function attach(bot) {
+    class pupa_utils {
+        constructor(bot) {
+          this.bot = bot
+        }
+        /*        
+        θ=arctan(gdv02​±v04​−g2d2−2ghv02​)
+
+        1.8 block height base for target
+        */
+       getPlayerNBT(username) {
+        return bot.players[username];
+       }
+       getOffset(launchPoint, targetPoint) {
+          const [x1, y1, z1] = [launchPoint.x, launchPoint.y, launchPoint.z];
+          const [x2, y2, z2] = [targetPoint.x, targetPoint.y, targetPoint.z];
+
+          const v0 = 10;
+          const g = 1.6;
+
+          const d = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
+          const h = y2 - y1;
+
+          if (d === 0) {
+              return h >= 0 ? [Infinity] : [-Infinity];
+          }
+
+          const v0Sq = v0 * v0;
+          const discriminant = v0Sq * v0Sq - g * (g * d * d + 2 * h * v0Sq);
+
+          if (discriminant < 0) {
+              return [];
+          }
+
+          const sqrtDisc = Math.sqrt(discriminant);
+          const denominator = g * d;
+
+          const angle1 = Math.atan2(v0Sq + sqrtDisc, denominator);
+          const angle2 = Math.atan2(v0Sq - sqrtDisc, denominator);
+
+          const offset1 = d * Math.tan(angle1) - h + 1.8;
+          if (discriminant === 0) {
+              return [offset1];
+          }
+          const offset2 = d * Math.tan(angle2) - h + 1.8;
+          return [offset1, offset2]; /* High Arc / Low Arc */
+        }
+    }
+    bot.pupa_utils = new pupa_utils(bot)
+    return bot;
+}
+
+/*
 
 
 function isInCylinder([px, py, pz], { center: [cx, cy, cz], radius, height }) {
@@ -118,7 +171,7 @@ function isInBlock(entity, block, hitboxHeight = 1.8, hitboxWidth = 0.3) {
 /*
 2/2 for bot
 3/1 for entity 
-*/
+
 let lastCallTime = 0; // Timestamp of the last function call
 let cachedBlocks = []; // Cached result of the last function call
 
@@ -155,4 +208,4 @@ function blocksNear(entity, block, maxDistance = 2, count = 2) {
   cachedBlocks = blocks;
 
   return blocks;
-}
+}*/

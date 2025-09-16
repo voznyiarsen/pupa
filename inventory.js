@@ -77,10 +77,21 @@ module.exports = function attach(bot) {
 
         async equipTotem() {
             const totem = this.bot.inventory.findInventoryItem(this.bot.registry.itemsByName.totem_of_undying.id, null);
-
             if (totem && this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== totem.type) {
                 await this.bot.equip(totem.type, 'off-hand');
             }
+        }
+
+        async equipPearl() {
+            const pearl = bot.inventory.findInventoryItem(bot.registry.itemsByName.ender_pearl.id, null);
+            if (!pearl) return;
+            if (bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')]?.type !== pearl.type) {
+                await bot.equip(pearl.type, 'off-hand');
+            }
+        
+            bot.activateItem(true);
+            await bot.waitForTicks(1);
+            bot.deactivateItem();
         }
 
         async equipPassive() {

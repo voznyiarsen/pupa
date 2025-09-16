@@ -1,34 +1,48 @@
+const ui = require('./tui')();
+
 module.exports = function attach(bot) {
     class pupa_commands {
         constructor(bot) {
             this.bot = bot;
         }
         exec(data) { 
-            const piece = data.split(' ');
+            const command = data.split(' ');
             switch(true) {
                 /* TOSS ITEMS */
-                case /^ts \d+ \d+$/.test(data): // ITEM | COUNT
-                    this.bot.toss(piece[1], null, piece[2]);
-                    return true;
-                case /^ts \w+$/.test(data): // ITEM | DESTINATION
-                    this.bot.toss(piece[1]);
-                    return true;
+                case /^ts \d{1,3}(\s\d+)?$/.test(data): // ITEM | COUNT
+                    if (command.length === 3) {
+                        ui.log(`Tossing ${this.bot.registry.items[parseInt(command[1], 10)].displayName} x${parseInt(command[2], 10)}`);           
+                        this.bot.toss(parseInt(command[1], 10), null, parseInt(command[2], 10));
+                    } else {
+                        ui.log(`Tossing ${this.bot.registry.items[parseInt(command[1], 10)].displayName}`);             
+                        this.bot.toss(parseInt(command[1], 10));
+                    }
+                    break;
+                case /^ts \w+(\s\d+)?$/.test(data): // ITEM | COUNT
+                    if (command.length === 3) {
+                        ui.log(`Tossing ${this.bot.registry.itemsByName[command[1]].displayName} x${parseInt(command[2], 10)}`);           
+                        this.bot.toss(this.bot.registry.itemsByName[command[1]].id, null, parseInt(command[2], 10));
+                    } else {
+                        ui.log(`Tossing ${this.bot.registry.itemsByName[command[1]].displayName}`);             
+                        this.bot.toss(this.bot.registry.itemsByName[command[1]].id);
+                    }
+                    break;
                 case /^tsall$/.test(data):
-
                     this.bot.pupa_inventory.tossAllItems();
-                    return true;
+                    break;
                 /* EQUIP ITEMS */
                 case /^eq \d+ [\w-]+$/.test(data): // ITEM | DESTINATION
-                    this.bot.equip(piece[1], piece[2]);
-                    return true;
+                    this.bot.equip(command[1], command[2]);
+                    break;
                 /* UNEQIUP ITEMS */
                 case /^uneq [\w-]+$/.test(data): // DESTINATION
-                    this.bot.unequip(piece[1]);
-                    return true;
+                    this.bot.unequip(command[1]);
+                    break;
                 case /^uneqall$/.test(data): 
                     this.bot.pupa_inventory.unequipAllItems();
-                    return true;
+                    break;
                 /* PATHFIND */
+                /*
                 case /^goto -?\d*\s?-?\d*\s?-?\d*$/.test(data): 
                     if (piece.length === 4) {
                         let [x, y, z] = [piece[1], piece[2], piece[3]];
@@ -49,61 +63,42 @@ module.exports = function attach(bot) {
 
                         return `Set goal to X: ${x} Z: ${z}`;
                     }
-                    return true;
+                    break;
+                */
                 /* CHANGE MODE */
-                //case /^ieq$/.test(data):
-                //    isAutoEquipping = !isAutoEquipping; 
-                //    return true;
                 case /^cm(\s[0-3])?$/.test(data):
-                    this.bot.pupa_pvp.setMode(piece[1]);
-                    return true;
-                //case /^ice$/.test(data):
-                //    isChatEnabled = !isChatEnabled;
-                //    return true;
-                //case /^il$/.test(data):
-                //    isLogging = !isLogging;
-                //    return true;
-                //case /^ill$/.test(data):
-                //    isLobbyLocked = !isLobbyLocked
-                //    renderChatBox(`${status.ok}isLobbyLocked set to ${rateBoolValue(isLobbyLocked)}`);
-                //    return true;
-                //case /^is$/.test(data):
-                //    isSilent = !isSilent;
-                //    renderChatBox(`${status.ok}isSilent set to ${rateBoolValue(isSilent)}`);
-                //   return true;
+                    ui.log(command[1]);
+                    this.bot.pupa_pvp.setMode(command[1]);
+                    break;
                 /* ENABLE/DISABLE COMBAT */
-                case /^g$/.test(data):
-                    isCombatEnabled = !isCombatEnabled;
-                    if (!isCombatEnabled) resetCombat();
-                    return true;
+                case /^s$/.test(data):
+                    bot.pupa_pvp.setMode(4);
+                    break;
                 case /^fe$/.test(data): {
                         const player = this.bot.nearestEntity(e => e.type === 'player' && 
                         e.position.distanceTo(this.bot.entity.position) <= 128 &&
                         e.username === master);
                     }
-                    return true;
-                case /^s$/.test(data):
-                    resetCombat();
-                    return true;
+                    break;
                 /* ALLY ADD/REMOVE */
                 case /^aa \S+$/.test(data):
                     allies.push(command[1]);
-                    return true;
+                    break;
                 case /^ar \S+$/.test(data):
                     allies = allies.filter(item => item !== command[1]);
-                    return true;
+                    break;
                 case /^raa$/.test(data):
                     allies = [master, this.bot.username];
-                    return true;
+                    break;
                 /* RESTORE LOADOUT */
                 case /^rep$/.test(data):
                     restoreLoadout();
-                    return true;
+                    break;
                 /* TARGET PLAYER */
                 case /^trg \S+$/.test(data): 
                     targetPlayer = this.bot.players[command[1]];
                     sysCombatMode = 4;
-                    return true;
+                    break;
                 /* CHECK PLAYER */
                 case /^pdb \S+$/.test(data): {
                     const player = this.bot.players[command[1]];
@@ -114,7 +109,7 @@ module.exports = function attach(bot) {
                         renderChatBox(`${status.warn}No entry of player found`);
                     }
                 }
-                    return true;
+                    break;
                 /* CHECK ITEM IN SLOT */
                 case /^sdb \d+$/.test(data): {
                     const item = this.bot.inventory.slots[command[1]];
@@ -125,18 +120,20 @@ module.exports = function attach(bot) {
                         renderChatBox(`${status.warn}No entry of item in slot ${command[1]} found`);
                     }
                 }
-                    return true;
+                    break;
                 /* LIST ELEMENTS */
                 case /^i$/.test(data):
                     getItems();
-                    return true;
+                    break;
                 case /^p$/.test(data):
                     getPlayers();
-                    return true;
+                    break;
                 /* QUIT */
                 case /^q$/.test(data):
                     this.bot.end();
                     process.exit(0);
+                default:
+                    return false;
             }
         }
     }

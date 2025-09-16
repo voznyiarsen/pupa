@@ -1,6 +1,11 @@
 require('dotenv').config()
 
+const util = require('node:util')
+
 const mineflayer = require('mineflayer');
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
+const pvp = require('mineflayer-pvp').plugin;
+
 const ui = require('./tui')();
 
 const pupa_inventory = require('./inventory');
@@ -32,11 +37,15 @@ function start_client() {
 
     bot.on('login', () => {
         ui.log("[Client] Successfully logged into account");
-        module.exports = { bot };
+        //module.exports = { bot };
         
+        bot.loadPlugin(pathfinder);
+        bot.loadPlugin(pvp);
+
         pupa_inventory(bot);
         pupa_pvp(bot);
         pupa_commands(bot);
+        pupa_utils(bot);
         // Module loading
         //require('./pvp');
         //pupa_inventory = new Inventory(bot);
@@ -55,10 +64,19 @@ function start_client() {
     
     bot.on('error', ui.log);
 
-    bot.on('chat', (message) => {
+    bot.on('chat', async (username, message) => {
+        ui.log(`<${username}> ${message}`);
+        ui.log(util.inspect(bot.registry.items[2],true,null,true))
+        ui.log(`BOT Position ${bot.entity.position}`);
+        ui.log(`TARGET Position ${bot.players['Patr10t'].entity.position}`)
+        ui.log(`Arc: ${bot.pupa_utils.getOffset(bot.entity.position, bot.players['Patr10t'].entity.position)}`);
+
+        bot.lookAt(bot.players['Patr10t'].entity.position.offset(0, bot.pupa_utils.getOffset(bot.entity.position, bot.players['Patr10t'].entity.position)[1], 0), true);
+        await bot.waitForTicks(5);
+        bot.pupa_inventory.equipPearl();
+
         switch (true) {
-            case message = 'gg':
-                
+            case message == 'gg':
                 break;
         
             default:
@@ -69,9 +87,7 @@ function start_client() {
 
 ui.onInput(text => {
     if (!text.match(/^\s?$/)) {
-        if (bot.pupa_commands.exec(text)) {
-            ui.log(`[Command] Executing '${text}'`);
-        } else {
+        if (bot.pupa_commands.exec(text) == false) {
             ui.log(`{green-fg}Sending:{/} "${text}"`);
             bot.chat(text);
         }

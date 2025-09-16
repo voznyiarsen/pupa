@@ -1,8 +1,11 @@
-// terminal-ui.js
 const blessed = require('blessed');
 const contrib = require('blessed-contrib');
 
-module.exports = createTerminalUI = () => {
+let uiInstance = null;
+
+const createTerminalUI = () => {
+  if (uiInstance) return uiInstance;
+
   const screen = blessed.screen({
     smartCSR: true,
     title: 'Terminal UI',
@@ -12,7 +15,6 @@ module.exports = createTerminalUI = () => {
 
   const grid = new contrib.grid({ rows: 1, cols: 1, screen: screen });
   
-  // Create log box using blessed.log
   const logBox = grid.set(0, 0, 0.75, 1, blessed.log, {
     label: ' Log ',
     tags: true,
@@ -30,7 +32,6 @@ module.exports = createTerminalUI = () => {
     }
   });
 
-  // Create input box
   const inputBox = grid.set(0, 0, 0.25, 1, blessed.textbox, {
     bottom: 0,
     height: 3,
@@ -46,7 +47,6 @@ module.exports = createTerminalUI = () => {
     }
   });
 
-  // Initial log messages
   logBox.add('{bold}Terminal UI Initialized{/bold}');
   logBox.add('┌─────────────────────────────────────┐');
   logBox.add('│ Type text and press {blue-fg}Enter{/} to submit │');
@@ -54,29 +54,23 @@ module.exports = createTerminalUI = () => {
   logBox.add('│ Use {blue-fg}↑/↓{/} keys to scroll logs         │');
   logBox.add('└─────────────────────────────────────┘');
 
-  // Handle input submission
   const inputCallbacks = [];
   inputBox.on('submit', text => {
     const timestamp = new Date().toLocaleTimeString();
     const formatted = `{cyan-fg}[${timestamp}]{/} ${text}`;
     
-    // Add to log box
     logBox.add(formatted);
-    
-    // Notify listeners
     inputCallbacks.forEach(cb => cb(text));
     inputBox.clearValue();
     inputBox.focus();
     screen.render();
   });
 
-  // Handle escape key
   inputBox.key('escape', () => {
     inputBox.clearValue();
     screen.render();
   });
 
-  // Arrow key scrolling for log content
   screen.key(['up', 'down', 'pageup', 'pagedown'], (ch, key) => {
     switch (key.name) {
       case 'up':
@@ -100,10 +94,8 @@ module.exports = createTerminalUI = () => {
     screen.render();
   });
 
-  // Quit handling
   screen.key(['C-c', 'escape'], () => process.exit(0));
 
-  // Handle resize
   screen.on('resize', () => {
     logBox.height = Math.max(3, Math.floor(screen.height * 0.75));
     inputBox.height = 3;
@@ -111,49 +103,29 @@ module.exports = createTerminalUI = () => {
     screen.render();
   });
 
-  // UI init
   logBox.height = Math.max(3, Math.floor(screen.height * 0.75));
   inputBox.height = 3;
   inputBox.top = screen.height - 3;
   inputBox.focus();
   screen.render();
 
-  // Public API
-  return {
-    /**
-     * Log content to the terminal UI
-     * @param {string} content - Text to display (supports blessed tags)
-     */
+  uiInstance = {
     log: (content) => {
       logBox.log(content);
       screen.render();
     },
-
-    /**
-     * Register input handler
-     * @param {function} callback - Receives submitted text
-     */
     onInput: (callback) => {
       inputCallbacks.push(callback);
     },
-
-    /**
-     * Get scrollback history
-     * @returns {string[]} Array of logged entries
-     */
     getHistory: () => logBox.getText().split('\n'),
-
-    /**
-     * Get current scroll position
-     * @returns {number} Current scroll index
-     */
     getScrollPosition: () => logBox.getScroll(),
-
-    /**
-     * Destroy UI and clean up
-     */
     destroy: () => {
       screen.destroy();
+      uiInstance = null;
     }
   };
+
+  return uiInstance;
 };
+
+module.exports = createTerminalUI;

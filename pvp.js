@@ -1,20 +1,19 @@
-const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
-const pvp = require('mineflayer-pvp').plugin;
-
 
 module.exports = function attach(bot) {
-    bot.loadPlugin(pathfinder);
-    bot.loadPlugin(pvp);
+
 
     class pupa_pvp {
+        allies = [];
+
+        mode = 0;
+
         constructor(bot) {
             this.bot = bot;
-            this.mode = 0;
-            this.allies = [];
         }
+        
         setMode(mode) {
             this.mode++;
-            if (this.mode > 3) this.mode = 0;
+            if (this.mode > 4) this.mode = 0;
             if (mode) this.mode = mode;
         }
         getTargetFilter() {
@@ -23,12 +22,12 @@ module.exports = function attach(bot) {
                     return e => e.type === 'mob' &&
                                 e.kind === 'Hostile mobs' &&
                                 e.position.distanceTo(this.bot.entity.position) <= 128;
-                case 1: // verified SURVIVAL mode player no constraints
+                case 1: 
                     return e => e.type === 'player' && 
                                 this.bot.players[e.username]?.gamemode === 0 &&
                                 !this.allies.includes(e.username) &&
                                 e.position.distanceTo(this.bot.entity.position) <= 128;
-                case 2: //
+                case 2: 
                     return e => e.type === 'player' &&
                                 this.bot.players[e.username]?.gamemode === 0 && 
                                 !this.allies.includes(e.username) &&
@@ -37,8 +36,10 @@ module.exports = function attach(bot) {
                                 e.position.distanceTo(this.bot.entity.position) < 128;
                 case 3:
                     return e => e.type === 'player' && 
-                                e.username === (this.desired.username || this.allies[0]) &&
+                                e.username === (this.allies[0]) &&
                                 e.position.distanceTo(this.bot.entity.position) <= 128;
+                case 4:
+                    return;
                 default:
                     return null;
             }
