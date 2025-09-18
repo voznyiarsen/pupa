@@ -7,10 +7,9 @@ module.exports = function attach(bot) {
         θ=arctan(gdv02​±v04​−g2d2−2ghv02​)
 
         1.8 block height base for target
+
+        switch between high/low
         */
-       getPlayerNBT(username) {
-        return bot.players[username];
-       }
        getOffset(launchPoint, targetPoint) {
           const [x1, y1, z1] = [launchPoint.x, launchPoint.y, launchPoint.z];
           const [x2, y2, z2] = [targetPoint.x, targetPoint.y, targetPoint.z];
@@ -44,6 +43,21 @@ module.exports = function attach(bot) {
           }
           const offset2 = d * Math.tan(angle2) - h + 1.8;
           return [offset1, offset2]; /* High Arc / Low Arc */
+        }
+        // x y z corner + x y z corner = 3d area, stay in area and or disable building onto the area,  if bot.entity.position is in area bot.pathfinder.place/digCost is 999
+        isInArea(point, corner1, corner2) {
+            const minX = Math.min(corner1[0], corner2[0]);
+            const maxX = Math.max(corner1[0], corner2[0]);
+            const minY = Math.min(corner1[1], corner2[1]);
+            const maxY = Math.max(corner1[1], corner2[1]);
+            const minZ = Math.min(corner1[2], corner2[2]);
+            const maxZ = Math.max(corner1[2], corner2[2]);
+
+            return (
+                point[0] >= minX && point[0] <= maxX &&
+                point[1] >= minY && point[1] <= maxY &&
+                point[2] >= minZ && point[2] <= maxZ
+            );
         }
     }
     bot.pupa_utils = new pupa_utils(bot)

@@ -4,6 +4,7 @@ module.exports = function attach(bot) {
 
     class pupa_pvp {
         allies = [];
+        enemies = [];
 
         mode = 0;
 
@@ -44,7 +45,9 @@ module.exports = function attach(bot) {
                     return null;
             }
         }
-    }
+    } // add worker threads
+
+    
     bot.pupa_pvp = new pupa_pvp(bot)
     return bot;
 }

@@ -1,44 +1,95 @@
 const ui = require('./tui')();
 
+const util = require('node:util');
+const vm = require('vm');
+
 module.exports = function attach(bot) {
     class pupa_commands {
         constructor(bot) {
             this.bot = bot;
         }
-        exec(data) { 
+        async exec(codeString) {
+            const context = {
+                console: console,
+                require: require,
+                process: process,
+                setTimeout,
+                setInterval,
+                setImmediate,
+                clearTimeout,
+                clearInterval,
+                clearImmediate,
+                ui,
+                bot
+            };
+
+            vm.createContext(context);
+        
+            try {
+                const script = new vm.Script(codeString, { 
+                    filename: 'command.vm',
+                    displayErrors: true 
+                });
+
+                const result = script.runInContext(context, { 
+                    displayErrors: true,
+                    timeout: 5000 
+                });
+
+                if (result instanceof Promise) {
+                    return await result;
+                }
+                return result;
+            } catch (error) {
+                if (error.name === 'SyntaxError' || 
+                    error.name === 'ReferenceError' || 
+                    error.name === 'TypeError') {
+                    throw new Error(`Execution error: ${error.message}`);
+                }
+                throw error;
+            }
+        }
+        query(data) { 
             const command = data.split(' ');
             switch(true) {
+                case /^x .+$/.test(data):
+                    this.exec(command[1]);
+                    break;
                 /* TOSS ITEMS */
                 case /^ts \d{1,3}(\s\d+)?$/.test(data): // ITEM | COUNT
                     if (command.length === 3) {
-                        ui.log(`Tossing ${this.bot.registry.items[parseInt(command[1], 10)].displayName} x${parseInt(command[2], 10)}`);           
-                        this.bot.toss(parseInt(command[1], 10), null, parseInt(command[2], 10));
+                        ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${this.bot.registry.items[parseInt(command[1])].displayName} x${parseInt(command[2])}`);           
+                        this.bot.toss(parseInt(command[1]), null, parseInt(command[2]));
                     } else {
-                        ui.log(`Tossing ${this.bot.registry.items[parseInt(command[1], 10)].displayName}`);             
-                        this.bot.toss(parseInt(command[1], 10));
+                        ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${this.bot.registry.items[parseInt(command[1])].displayName}`);             
+                        this.bot.toss(parseInt(command[1]));
                     }
                     break;
                 case /^ts \w+(\s\d+)?$/.test(data): // ITEM | COUNT
                     if (command.length === 3) {
-                        ui.log(`Tossing ${this.bot.registry.itemsByName[command[1]].displayName} x${parseInt(command[2], 10)}`);           
-                        this.bot.toss(this.bot.registry.itemsByName[command[1]].id, null, parseInt(command[2], 10));
+                        ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${this.bot.registry.itemsByName[command[1]].displayName} x${parseInt(command[2])}`);           
+                        this.bot.toss(this.bot.registry.itemsByName[command[1]].id, null, parseInt(command[2]));
                     } else {
-                        ui.log(`Tossing ${this.bot.registry.itemsByName[command[1]].displayName}`);             
+                        ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${this.bot.registry.itemsByName[command[1]].displayName}`);             
                         this.bot.toss(this.bot.registry.itemsByName[command[1]].id);
                     }
                     break;
                 case /^tsall$/.test(data):
+                    ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${this.bot.inventory.slots.filter(Boolean).length} ${this.bot.inventory.slots.filter(Boolean).length === 1 ? 'item' : 'items'}`);
                     this.bot.pupa_inventory.tossAllItems();
                     break;
                 /* EQUIP ITEMS */
                 case /^eq \d+ [\w-]+$/.test(data): // ITEM | DESTINATION
-                    this.bot.equip(command[1], command[2]);
+                    ui.log(`{green-fg}[pupa_inventory]{/} Equipping ${this.bot.registry.items[parseInt(command[1])].displayName} to ${command[2]}`);
+                    this.bot.equip(parseInt(command[1]), command[2]); // improve ts to take word input
                     break;
                 /* UNEQIUP ITEMS */
                 case /^uneq [\w-]+$/.test(data): // DESTINATION
+                    ui.log(`{green-fg}[pupa_inventory]{/} Unequipping ${this.bot.inventory.slots[this.bot.getEquipmentDestSlot(command[1])].displayName} from ${command[1]}`);
                     this.bot.unequip(command[1]);
                     break;
                 case /^uneqall$/.test(data): 
+                    ui.log(`{green-fg}[pupa_inventory]{/} Unequipping all equipped items...`);
                     this.bot.pupa_inventory.unequipAllItems();
                     break;
                 /* PATHFIND */
@@ -67,21 +118,16 @@ module.exports = function attach(bot) {
                 */
                 /* CHANGE MODE */
                 case /^cm(\s[0-3])?$/.test(data):
-                    ui.log(command[1]);
                     this.bot.pupa_pvp.setMode(command[1]);
+                    ui.log(`{green-fg}[pupa_pvp]{/} Mode changed to ${this.bot.pupa_pvp.mode}`);
                     break;
                 /* ENABLE/DISABLE COMBAT */
                 case /^s$/.test(data):
+                    ui.log(`{green-fg}[pupa_pvp]{/} Pacifying bot...`);
                     bot.pupa_pvp.setMode(4);
                     break;
-                case /^fe$/.test(data): {
-                        const player = this.bot.nearestEntity(e => e.type === 'player' && 
-                        e.position.distanceTo(this.bot.entity.position) <= 128 &&
-                        e.username === master);
-                    }
-                    break;
                 /* ALLY ADD/REMOVE */
-                case /^aa \S+$/.test(data):
+                case /^aa \S+$/.test(data): // rework,   rework
                     allies.push(command[1]);
                     break;
                 case /^ar \S+$/.test(data):
@@ -96,37 +142,43 @@ module.exports = function attach(bot) {
                     break;
                 /* TARGET PLAYER */
                 case /^trg \S+$/.test(data): 
-                    targetPlayer = this.bot.players[command[1]];
-                    sysCombatMode = 4;
+                    const player = this.bot.players[command[1]];
+
                     break;
                 /* CHECK PLAYER */
                 case /^pdb \S+$/.test(data): {
                     const player = this.bot.players[command[1]];
                     if (player) {
-                        renderChatBox(`${status.ok}Player found`);
-                        renderChatBox(util.inspect(player, true, null, true));
+                        ui.log(`{green-fg}[pupa_commands]{/} NBT Data of player "${player.username}":`);
+                        ui.log(util.inspect(player, true, null, true));
                     } else {
-                        renderChatBox(`${status.warn}No entry of player found`);
+                        ui.log(`{red-fg}[pupa_commands]{/} NBT Data of player ${command[1]} not found`);
                     }
                 }
                     break;
-                /* CHECK ITEM IN SLOT */
+                /* CHECK ITEM IN SLOT nbt */
                 case /^sdb \d+$/.test(data): {
                     const item = this.bot.inventory.slots[command[1]];
+                    // find items + slot instead
                     if (item) {
-                        renderChatBox(`${status.ok}Item found`);
-                        renderChatBox(util.inspect(item, true, null, true));
+                        ui.log(`{green-fg}[pupa_commands]{/} NBT Data of item "${item.displayName}":`);
+                        ui.log(util.inspect(item, true, null, true));
                     } else {
-                        renderChatBox(`${status.warn}No entry of item in slot ${command[1]} found`);
+                        ui.log(`{red-fg}[pupa_commands]{/} NBT Data of item ${command[1]} not found`);
                     }
                 }
                     break;
                 /* LIST ELEMENTS */
                 case /^i$/.test(data):
+
+
                     getItems();
                     break;
-                case /^p$/.test(data):
-                    getPlayers();
+                case /^p$/.test(data): {
+                    const players = this.bot.players 
+
+                    
+                    }
                     break;
                 /* QUIT */
                 case /^q$/.test(data):

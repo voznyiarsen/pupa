@@ -1,6 +1,6 @@
-require('dotenv').config()
+require('dotenv').config();
 
-const util = require('node:util')
+const util = require('node:util');
 
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
@@ -36,7 +36,7 @@ function start_client() {
     bot = mineflayer.createBot(config);
 
     bot.on('login', () => {
-        ui.log("[Client] Successfully logged into account");
+        ui.log("{green-fg}[Client]{/} Successfully logged into account");
         //module.exports = { bot };
         
         bot.loadPlugin(pathfinder);
@@ -52,11 +52,12 @@ function start_client() {
     });
       
     bot.on('kicked', (reason) =>  {
-        ui.log(`[Client] Bot kicked from ${config.host}:${config.port}, reason: '${reason}'`);
+        ui.log(`{red-fg}[Client]{/} Bot kicked from ${config.host}:${config.port}, reason: '${reason}'`);
     });
     
     bot.on('end', (reason) => {
-        ui.log(`[Client] Bot ended from ${config.host}:${config.port}, reason: '${reason}'`);
+        ui.log(`{red-fg}[Client]{/} Bot ended from ${config.host}:${config.port}, reason: '${reason}'`);
+        ui.log(`{red-fg}[Client]{/} Attempting reconnect in 6s...`)
         setTimeout(() => {
             start_client();  
         }, 6000)
@@ -66,15 +67,6 @@ function start_client() {
 
     bot.on('chat', async (username, message) => {
         ui.log(`<${username}> ${message}`);
-        ui.log(util.inspect(bot.registry.items[2],true,null,true))
-        ui.log(`BOT Position ${bot.entity.position}`);
-        ui.log(`TARGET Position ${bot.players['Patr10t'].entity.position}`)
-        ui.log(`Arc: ${bot.pupa_utils.getOffset(bot.entity.position, bot.players['Patr10t'].entity.position)}`);
-
-        bot.lookAt(bot.players['Patr10t'].entity.position.offset(0, bot.pupa_utils.getOffset(bot.entity.position, bot.players['Patr10t'].entity.position)[1], 0), true);
-        await bot.waitForTicks(5);
-        bot.pupa_inventory.equipPearl();
-
         switch (true) {
             case message == 'gg':
                 break;
@@ -87,21 +79,21 @@ function start_client() {
 
 ui.onInput(text => {
     if (!text.match(/^\s?$/)) {
-        if (bot.pupa_commands.exec(text) == false) {
+        if (bot.pupa_commands.query(text) === false) {
             ui.log(`{green-fg}Sending:{/} "${text}"`);
             bot.chat(text);
         }
     }
 });
 
-process.on('uncaughtException', (err) => ui.log(`[Exception] ${err}`));
-process.on('warning', (warn) => ui.log(`[Warning] ${warn}`));
+process.on('uncaughtException', (err) => ui.log(`{yellow-fg}[Exception]{/} ${err}`));
+process.on('warning', (warn) => ui.log(`{yellow-fg}[Warning]{/} ${warn}`));
 
 (async () => {
     try {
         start_client();
     } catch (error) {
-        ui.log(`[Error] Bot initialization failed: '${error}'`);
+        ui.log(`{red-fg}[Error]{/} Bot initialization failed: '${error}'`);
     }
 })();
 
