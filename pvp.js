@@ -1,7 +1,7 @@
 
+const { Vec3 } = require('vec3');
+
 module.exports = function attach(bot) {
-
-
     class pupa_pvp {
         allies = [];
         enemies = [];
@@ -16,6 +16,46 @@ module.exports = function attach(bot) {
             this.mode++;
             if (this.mode > 4) this.mode = 0;
             if (mode) this.mode = mode;
+        }
+        /* // Looking handled internaly, rewrite to have lambda/kami blue-like viewlock
+        isInRange() { // 3
+            if (this.bot.pvp.target.entity.position.distanceTo(this.bot.entity.position) <= this.bot.pvp.attackRange && !this.bot.pathfinder.isMoving()) {
+                this.bot.lookAt(this.bot.pvp.target.position.offset(0, 1.6, 0), true);
+            }
+        }
+        */
+        isNearWater() {
+
+
+        }
+
+        /// bounding box check if air n+1.y > air n+1.y while x and z are ===, and air n >= 2
+        isNearAir() {
+            /*const airs = this.bot.findBlocks({ //rewr
+                point: this.bot.pvp.target.entity.position.offset,
+                matching: this.bot.registry.blocksByName.air.id,
+                maxDistance: 0, // too arbitrary
+
+            });*/
+
+          bot.blockAt(point, extraInfos=true);
+
+            return airs;
+          /*
+            const b = this.bot.findBlocks({
+                point: e.position.offset(0, -1.5, 0),
+                matching: this.bot.registry.blocksByName.air.id,
+                maxDistance: 0,
+                count: 2,
+            });
+                // if blocks lower than bot and block 1 lower than 2 y and bloc 1 x eq bloc 2 x and z
+            return (b[0].y < e.position.y && b[1].y < e.position.y && b[0].y < b[1].y && b[0].x === b[1].x && b[0].z === b[1].z);*/
+        }
+        isNearWeb() {
+            const web = this.bot.findBlocks({
+                point: this.bot.pvp.target.entity.position,
+                matching: this.bot.registry.blocksByName
+            })
         }
         getTargetFilter() {
             switch (this.mode) {
@@ -52,28 +92,6 @@ module.exports = function attach(bot) {
     return bot;
 }
 /*
-async function tossPearl() {
-    const entity = bot.nearestEntity(e => e === bot.pvp.target && e.position.distanceTo(bot.entity.position) >= 10);
-    const pearl = bot.inventory.findInventoryItem(bot.registry.itemsByName.ender_pearl.id, null);
-    if (!pearl || !entity || bot.entityAtCursor(3.5)) {
-        return;
-    }
-    
-    bot.pvp.forceStop();
-    const angleInBlocks = getPearlTrajectory(entity.position.distanceTo(bot.entity.position));
-    
-    if (bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')]?.type !== pearl.type) {
-        await bot.equip(pearl.type, 'off-hand');
-    }
-    
-    await bot.lookAt(entity.position.offset(0, angleInBlocks + entity.height / 2, 0), true);
-    await bot.waitForTicks(5);
-
-    bot.activateItem(true);
-    await bot.waitForTicks(1);
-    bot.deactivateItem();
-}
-
 function updateTarget() {
   entity = bot.nearestEntity(filterTarget());
 
@@ -102,11 +120,6 @@ function combatTargeting() {
     if (this.entity.position.distanceTo(this.bot.entity.position) <= this.bot.pvp.attackRange && !this.bot.pathfinder?.isMoving()) {
       this.bot.lookAt(this.entity.position.offset(0, this.entity.eyeHeight, 0), true);
     }
-  }
-
-function combatAttacking() {
-    if (!this.entity) return;
-    this.bot.pvp.attack(this.entity);
   }
 
 function combatLoop() {

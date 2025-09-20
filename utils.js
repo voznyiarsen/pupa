@@ -1,3 +1,5 @@
+const { Vec3 } = require('vec3');
+
 module.exports = function attach(bot) {
     class pupa_utils {
         constructor(bot) {
@@ -6,43 +8,43 @@ module.exports = function attach(bot) {
         /*        
         θ=arctan(gdv02​±v04​−g2d2−2ghv02​)
 
-        1.8 block height base for target
+        1.6 block height base for target
 
         switch between high/low
         */
-       getOffset(launchPoint, targetPoint) {
-          const [x1, y1, z1] = [launchPoint.x, launchPoint.y, launchPoint.z];
-          const [x2, y2, z2] = [targetPoint.x, targetPoint.y, targetPoint.z];
+        getOffset(launchPoint, targetPoint) {
+            const [x1, y1, z1] = [launchPoint.x, launchPoint.y, launchPoint.z];
+            const [x2, y2, z2] = [targetPoint.x, targetPoint.y, targetPoint.z];
 
-          const v0 = 10;
-          const g = 1.6;
+            const v0 = 10;
+            const g = 1.6;
 
-          const d = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
-          const h = y2 - y1;
+            const d = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
+            const h = y2 - y1;
 
-          if (d === 0) {
-              return h >= 0 ? [Infinity] : [-Infinity];
-          }
+            if (d === 0) {
+                return h >= 0 ? [Infinity] : [-Infinity];
+            }
 
-          const v0Sq = v0 * v0;
-          const discriminant = v0Sq * v0Sq - g * (g * d * d + 2 * h * v0Sq);
+            const v0Sq = v0 * v0;
+            const discriminant = v0Sq * v0Sq - g * (g * d * d + 2 * h * v0Sq);
 
-          if (discriminant < 0) {
-              return [];
-          }
+            if (discriminant < 0) {
+                return [];
+            }
 
-          const sqrtDisc = Math.sqrt(discriminant);
-          const denominator = g * d;
+            const sqrtDisc = Math.sqrt(discriminant);
+            const denominator = g * d;
 
-          const angle1 = Math.atan2(v0Sq + sqrtDisc, denominator);
-          const angle2 = Math.atan2(v0Sq - sqrtDisc, denominator);
+            const angle1 = Math.atan2(v0Sq + sqrtDisc, denominator);
+            const angle2 = Math.atan2(v0Sq - sqrtDisc, denominator);
 
-          const offset1 = d * Math.tan(angle1) - h + 1.8;
-          if (discriminant === 0) {
-              return [offset1];
-          }
-          const offset2 = d * Math.tan(angle2) - h + 1.8;
-          return [offset1, offset2]; /* High Arc / Low Arc */
+            const offset1 = d * Math.tan(angle1) - h + 1.6;
+            if (discriminant === 0) {
+                return [offset1];
+            }
+            const offset2 = d * Math.tan(angle2) - h + 1.6;
+            return [offset1, offset2]; /* High Arc / Low Arc */
         }
         // x y z corner + x y z corner = 3d area, stay in area and or disable building onto the area,  if bot.entity.position is in area bot.pathfinder.place/digCost is 999
         isInArea(point, corner1, corner2) {
@@ -58,6 +60,37 @@ module.exports = function attach(bot) {
                 point[1] >= minY && point[1] <= maxY &&
                 point[2] >= minZ && point[2] <= maxZ
             );
+        }
+        async isNearPassable(point) {
+            const yTop = point.y - 0.5;
+            const yBottom = yTop - 1;
+            // .shapes[0] 
+            // [x1, y1, z1, x2, y2, z2]  x0, 3,// z2, 5
+            for (let dx = -2; dx <= 2; dx++) {
+                for (let dz = -2; dz <= 2; dz++) {
+                    const x = point.x + dx;
+                    const z = point.z + dz;
+
+                    const shapeTop = bot.blockAt(new Vec3(x, yTop, z)).shapes[0];
+                    const shapeBottom = bot.blockAt(new Vec3(x, yBottom, z)).shapes[0];
+
+                    let [dxTop, dzTop] = [0, 0];
+                    let [dxBottom, dzBottom] = [0, 0];
+
+                    if (shapeTop) {
+                        [dxTop, dzTop] = [Math.abs(shapeTop[0] - shapeTop[3]), Math.abs(shapeTop[2] - shapeTop[5])];
+                    }
+
+                    if (shapeBottom) {
+                        [dxBottom, dzBottom] = [Math.abs(shapeBottom[0] - shapeBottom[3]), Math.abs(shapeBottom[2] - shapeBottom[5])];
+                    }
+
+                    if ((dxTop < 1 || dzTop < 1) && (dxBottom < 1 || dzBottom < 1)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
     }
     bot.pupa_utils = new pupa_utils(bot)

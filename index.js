@@ -12,14 +12,6 @@ const pupa_inventory = require('./inventory');
 const pupa_pvp = require('./pvp');
 const pupa_commands = require('./commands');
 const pupa_utils = require('./utils');
-/*
-const { Inventory } = require('./inventory');
-const { Pvp } = require('./pvp');
-//use as plugins instead
-
-let pupa_inventory;
-let pupa_pvp;
-*/
 
 const config = {
     host: process.argv[2] || process.env.PUPA_HOST,
@@ -37,7 +29,6 @@ function start_client() {
 
     bot.on('login', () => {
         ui.log("{green-fg}[Client]{/} Successfully logged into account");
-        //module.exports = { bot };
         
         bot.loadPlugin(pathfinder);
         bot.loadPlugin(pvp);
@@ -46,9 +37,6 @@ function start_client() {
         pupa_pvp(bot);
         pupa_commands(bot);
         pupa_utils(bot);
-        // Module loading
-        //require('./pvp');
-        //pupa_inventory = new Inventory(bot);
     });
       
     bot.on('kicked', (reason) =>  {
@@ -66,7 +54,14 @@ function start_client() {
     bot.on('error', ui.log);
 
     bot.on('chat', async (username, message) => {
-        ui.log(`<${username}> ${message}`);
+        ui.log(`<${username}> ${message}`); /// [ 0, 0, 0, 1, 1, 1 ]
+
+        //ui.log(util.inspect(bot.blockAt(bot.entity.position.offset(0, -1.5, 0)).shapes[0][1],false,null,true)); // if length [x1, y1, z1, x2, y2, z2] if delta x and z is less than 0.5
+
+        //ui.log(util.inspect(bot.pathfinder.movements.interactableBlocks,false,null,false))
+        //ui.log(util.inspect(bot.pathfinder.movements.replaceables,false,null,false))
+
+        ui.log(await bot.pupa_utils.isNearPassable(bot.entity.position));
         switch (true) {
             case message == 'gg':
                 break;
@@ -74,6 +69,11 @@ function start_client() {
             default:
                 break;
         }
+    });
+
+    bot.on('physicTick', () => {
+        // 
+
     });
 }
 
