@@ -49,7 +49,7 @@ module.exports = function attach(bot) {
                 throw error;
             }
         }
-        query(data) { 
+        async query(data) { 
             const command = data.split(' ');
             switch(true) {
                 case /^x .+$/.test(data):
@@ -92,6 +92,30 @@ module.exports = function attach(bot) {
                     ui.log(`{green-fg}[pupa_inventory]{/} Unequipping all equipped items...`);
                     this.bot.pupa_inventory.unequipAllItems();
                     break;
+                case /^testp$/.test(data): {
+                    const source = this.bot.entity.position;
+                    const target = this.bot.players['Patr10t'].entity.position;
+                    const offset = bot.pupa_utils.getPOffset(source, target);
+
+                    ui.log(`[test] Sending pearl from ${source} to ${target} Offset: ${offset}b`);
+                    this.bot.lookAt(target.offset(0, offset, 0), true);
+                    this.bot.pupa_inventory.equipPearl();
+                    }
+                    break;
+                case /^test$/.test(data):
+                    
+                    try {
+                        const target = this.bot.players['Patr10t'].entity.position;
+                        const velocity = this.bot.pupa_utils.getJumpVelocity(this.bot.entity.position, target);
+                        ui.log(`{green-fg}[pupa_utils]{/} got velocity: ${velocity} for ${this.bot.entity.position} to ${target}`);
+                        this.bot.entity.velocity.set(velocity[0], velocity[1], velocity[2]);
+                    } catch (error) {
+                        ui.log(`{red-fg}[pupa_utils]{/} setting bot.entity.velocity FAILED ${this.bot.entity.position}  ${this.bot.players['Patr10t'].entity.position}`);
+                    }
+                    
+                    
+                    break;
+
                 /* PATHFIND */
                 /*
                 case /^goto -?\d*\s?-?\d*\s?-?\d*$/.test(data): 

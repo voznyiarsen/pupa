@@ -24,33 +24,6 @@ module.exports = function attach(bot) {
             }
         }
         */
-        isNearWater() {
-
-
-        }
-
-        /// bounding box check if air n+1.y > air n+1.y while x and z are ===, and air n >= 2
-        isNearAir() {
-            /*const airs = this.bot.findBlocks({ //rewr
-                point: this.bot.pvp.target.entity.position.offset,
-                matching: this.bot.registry.blocksByName.air.id,
-                maxDistance: 0, // too arbitrary
-
-            });*/
-
-          bot.blockAt(point, extraInfos=true);
-
-            return airs;
-          /*
-            const b = this.bot.findBlocks({
-                point: e.position.offset(0, -1.5, 0),
-                matching: this.bot.registry.blocksByName.air.id,
-                maxDistance: 0,
-                count: 2,
-            });
-                // if blocks lower than bot and block 1 lower than 2 y and bloc 1 x eq bloc 2 x and z
-            return (b[0].y < e.position.y && b[1].y < e.position.y && b[0].y < b[1].y && b[0].x === b[1].x && b[0].z === b[1].z);*/
-        }
         isNearWeb() {
             const web = this.bot.findBlocks({
                 point: this.bot.pvp.target.entity.position,

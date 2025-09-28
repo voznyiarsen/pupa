@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const { Vec3 } = require('vec3');
 const util = require('node:util');
 
 const mineflayer = require('mineflayer');
@@ -37,6 +38,8 @@ function start_client() {
         pupa_pvp(bot);
         pupa_commands(bot);
         pupa_utils(bot);
+
+        ui.log(bot.pupa_utils.getJumpVelocity(new Vec3(419.5, 0, 163.5), new Vec3(420.5, 0, 163.5)));
     });
       
     bot.on('kicked', (reason) =>  {
@@ -56,7 +59,7 @@ function start_client() {
     bot.on('chat', async (username, message) => {
         ui.log(`<${username}> ${message}`); /// [ 0, 0, 0, 1, 1, 1 ]
 
-        //ui.log(util.inspect(bot.blockAt(bot.entity.position.offset(0, -1.5, 0)).shapes[0][1],false,null,true)); // if length [x1, y1, z1, x2, y2, z2] if delta x and z is less than 0.5
+        ui.log(util.inspect(bot.blockAt(bot.entity.position.offset(0, -1.5, 0)),true,null,true)); // if length [x1, y1, z1, x2, y2, z2] if delta x and z is less than 0.5
 
         //ui.log(util.inspect(bot.pathfinder.movements.interactableBlocks,false,null,false))
         //ui.log(util.inspect(bot.pathfinder.movements.replaceables,false,null,false))

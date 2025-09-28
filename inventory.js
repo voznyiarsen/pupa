@@ -89,6 +89,7 @@ module.exports = function attach(bot) {
                 await bot.equip(pearl.type, 'off-hand');
             }
         
+            await bot.waitForTicks(1);
             bot.activateItem(true);
             await bot.waitForTicks(1);
             bot.deactivateItem();

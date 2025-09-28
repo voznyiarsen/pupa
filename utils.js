@@ -6,15 +6,11 @@ module.exports = function attach(bot) {
           this.bot = bot
         }
         /*        
-        θ=arctan(gdv02​±v04​−g2d2−2ghv02​)
-
-        1.6 block height base for target
-
-        switch between high/low
+        1.6 block height to head base for target
         */
-        getOffset(launchPoint, targetPoint) {
-            const [x1, y1, z1] = [launchPoint.x, launchPoint.y, launchPoint.z];
-            const [x2, y2, z2] = [targetPoint.x, targetPoint.y, targetPoint.z];
+        getPOffset(source, target) {
+            const [x1, y1, z1] = [source.x, source.y, source.z];
+            const [x2, y2, z2] = [target.x, target.y, target.z];
 
             const v0 = 10;
             const g = 1.6;
@@ -44,10 +40,9 @@ module.exports = function attach(bot) {
                 return [offset1];
             }
             const offset2 = d * Math.tan(angle2) - h + 1.6;
-            return [offset1, offset2]; /* High Arc / Low Arc */
+            return offset2; // [offset1, offset2]; /* High Arc / Low Arc */
         }
-        // x y z corner + x y z corner = 3d area, stay in area and or disable building onto the area,  if bot.entity.position is in area bot.pathfinder.place/digCost is 999
-        isInArea(point, corner1, corner2) {
+        isInArea(source, corner1, corner2) {
             const minX = Math.min(corner1[0], corner2[0]);
             const maxX = Math.max(corner1[0], corner2[0]);
             const minY = Math.min(corner1[1], corner2[1]);
@@ -56,12 +51,87 @@ module.exports = function attach(bot) {
             const maxZ = Math.max(corner1[2], corner2[2]);
 
             return (
-                point[0] >= minX && point[0] <= maxX &&
-                point[1] >= minY && point[1] <= maxY &&
-                point[2] >= minZ && point[2] <= maxZ
+                source[0] >= minX && source[0] <= maxX &&
+                source[1] >= minY && source[1] <= maxY &&
+                source[2] >= minZ && source[2] <= maxZ
             );
         }
-        async isNearPassable(point) {
+        getLandableBlocks(point) {
+            // get ID blocks below point in area of 3-4 blocks, any non passable are saved into a DB
+        } 
+        getJumpVelocity(source, target) {
+            const Y_FIX = 0.42;
+            const MAX_HORIZONTAL_VELOCITY = 0.6;
+            const GRAVITY = 0.08;
+
+            const dx = target.x - source.x;
+            const dz = target.z - source.z;
+            const dy = target.y - source.y;
+
+            const a = 0.5 * GRAVITY;
+            const b = -Y_FIX;
+            const c = dy;
+
+            const discriminant = b * b - 4 * a * c;
+
+            if (discriminant < 0) {
+                const totalHorizontalDist = Math.sqrt(dx * dx + dz * dz);
+                if (totalHorizontalDist === 0) {
+                    return [0, Y_FIX, 0];
+                }
+
+                const vx = (dx / totalHorizontalDist) * MAX_HORIZONTAL_VELOCITY;
+                const vz = (dz / totalHorizontalDist) * MAX_HORIZONTAL_VELOCITY;
+                return [vx, Y_FIX, vz];
+            }
+
+            const t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
+            const t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
+
+            const time = Math.max(t1, t2) > 0 ? Math.max(t1, t2) : Math.min(t1, t2);
+
+            if (time <= 0) {
+                const totalHorizontalDist = Math.sqrt(dx * dx + dz * dz);
+                if (totalHorizontalDist === 0) {
+                    return [0, Y_FIX, 0];
+                }
+
+                const vx = (dx / totalHorizontalDist) * MAX_HORIZONTAL_VELOCITY;
+                const vz = (dz / totalHorizontalDist) * MAX_HORIZONTAL_VELOCITY;
+                return [vx, Y_FIX, vz];
+            }
+
+            let vx = dx / time;
+            let vz = dz / time;
+
+            const currentSpeed = Math.sqrt(vx * vx + vz * vz);
+            if (currentSpeed > MAX_HORIZONTAL_VELOCITY) {
+                const scale = MAX_HORIZONTAL_VELOCITY / currentSpeed;
+                vx *= scale;
+                vz *= scale;
+            }
+
+            return [vx, Y_FIX, vz];
+        }
+        async isInWater(point) { // true height at prop 0: 0.875,  change height flowing water: _properties: { level: 2 },
+          // all player bounding box corners  needst to touch water -0.01 inside
+            const yPlane = point.y - 0.125;
+            const corners = [
+                new Vec3(point.x - 0.5, yPlane, point.z - 0.5),
+                new Vec3(point.x - 0.5, yPlane, point.z + 0.5),
+                new Vec3(point.x + 0.5, yPlane, point.z - 0.5),
+                new Vec3(point.x + 0.5, yPlane, point.z + 0.5)
+            ];
+          
+            for (const corner of corners) {
+                const block = bot.blockAt(corner);
+                if (block?.name !== 'foo' && block?.name !== 'bar') {
+                    return false;
+                }
+            }
+            return true;
+        }
+        async isNearPassable(point) { //boundingBox: empty
             const yTop = point.y - 0.5;
             const yBottom = yTop - 1;
             // .shapes[0] 
@@ -71,8 +141,13 @@ module.exports = function attach(bot) {
                     const x = point.x + dx;
                     const z = point.z + dz;
 
-                    const shapeTop = bot.blockAt(new Vec3(x, yTop, z)).shapes[0];
-                    const shapeBottom = bot.blockAt(new Vec3(x, yBottom, z)).shapes[0];
+                    const blockTop = bot.blockAt(new Vec3(x, yTop, z));
+                    const blockBottom = bot.blockAt(new Vec3(x, yBottom, z));
+
+                    if (blockTop.boundingBox === 'empty' && blockBottom.boundingBox === 'empty') return true;
+
+                    const shapeTop = blockTop.shapes[0];
+                    const shapeBottom = blockBottom.shapes[0];
 
                     let [dxTop, dzTop] = [0, 0];
                     let [dxBottom, dzBottom] = [0, 0];
@@ -85,9 +160,7 @@ module.exports = function attach(bot) {
                         [dxBottom, dzBottom] = [Math.abs(shapeBottom[0] - shapeBottom[3]), Math.abs(shapeBottom[2] - shapeBottom[5])];
                     }
 
-                    if ((dxTop < 1 || dzTop < 1) && (dxBottom < 1 || dzBottom < 1)) {
-                        return true;
-                    }
+                    if ((dxTop < 1 || dzTop < 1) && (dxBottom < 1 || dzBottom < 1)) return true;
                 }
             }
             return false;
@@ -96,10 +169,7 @@ module.exports = function attach(bot) {
     bot.pupa_utils = new pupa_utils(bot)
     return bot;
 }
-
 /*
-
-
 function isInCylinder([px, py, pz], { center: [cx, cy, cz], radius, height }) {
   const withinHeight = py >= cy && py <= cy + height;
   const withinRadius = (px - cx) ** 2 + (pz - cz) ** 2 <= radius ** 2;
@@ -115,6 +185,7 @@ function getDeltaHealth() {
     newHealth = 0;
   }
 }
+/////
 function getStrafeVelocity(position, angleDegrees, speed) {
   const [targetX, targetZ] = position;
   const dx = targetX - bot.entity.position.x;
@@ -160,6 +231,9 @@ function getMidpointVec3(point1,point2) {
     z: (point1.z + point2.z) / 2
   };
 }
+
+
+/////////
 function isInBlock(entity, block, hitboxHeight = 1.8, hitboxWidth = 0.3) {
   // Convert block to an array if it's not already
   const blocksToCheck = Array.isArray(block) ? block : [block];
