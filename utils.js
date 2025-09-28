@@ -125,7 +125,7 @@ module.exports = function attach(bot) {
           
             for (const corner of corners) {
                 const block = bot.blockAt(corner);
-                if (block?.name !== 'foo' && block?.name !== 'bar') {
+                if (block?.name !== 'water' && block?.name !== 'lava') {
                     return false;
                 }
             }
@@ -160,7 +160,7 @@ module.exports = function attach(bot) {
                         [dxBottom, dzBottom] = [Math.abs(shapeBottom[0] - shapeBottom[3]), Math.abs(shapeBottom[2] - shapeBottom[5])];
                     }
 
-                    if ((dxTop < 1 || dzTop < 1) && (dxBottom < 1 || dzBottom < 1)) return true;
+                    if ((dxTop < this.bot.entity.width || dzTop < this.bot.entity.width) && (dxBottom < this.bot.entity.width || dzBottom < this.bot.entity.width)) return true;
                 }
             }
             return false;
