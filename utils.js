@@ -6,7 +6,7 @@ module.exports = function attach(bot) {
           this.bot = bot
         }
         /*        
-        1.6 block height to head base for target
+        1.62 block height to head base for target entity.eyeHeight
         */
         getPOffset(source, target) {
             const [x1, y1, z1] = [source.x, source.y, source.z];
@@ -35,14 +35,22 @@ module.exports = function attach(bot) {
             const angle1 = Math.atan2(v0Sq + sqrtDisc, denominator);
             const angle2 = Math.atan2(v0Sq - sqrtDisc, denominator);
 
-            const offset1 = d * Math.tan(angle1) - h + 1.6;
+            const offset1 = d * Math.tan(angle1) - h + 1.62;
             if (discriminant === 0) {
                 return [offset1];
             }
-            const offset2 = d * Math.tan(angle2) - h + 1.6;
+            const offset2 = d * Math.tan(angle2) - h + 1.62;
             return offset2; // [offset1, offset2]; /* High Arc / Low Arc */
+        } 
+        isInCylinder(source, point, radius, height) {
+            const dy = point.y - source.y;
+            if (dy < 0 || dy > height) return false;
+
+            const dx = point.x - source.x;
+            const dz = point.z - source.z;
+            return dx * dx + dz * dz <= radius * radius;
         }
-        isInArea(source, corner1, corner2) {
+        isInBox(source, corner1, corner2) {
             const minX = Math.min(corner1[0], corner2[0]);
             const maxX = Math.max(corner1[0], corner2[0]);
             const minY = Math.min(corner1[1], corner2[1]);
@@ -56,12 +64,43 @@ module.exports = function attach(bot) {
                 source[2] >= minZ && source[2] <= maxZ
             );
         }
-        getLandableBlocks(point) {
-            // get ID blocks below point in area of 3-4 blocks, any non passable are saved into a DB
-        } 
+        getSolidBlocks(source) {
+            const results = [];
+  
+            // Define grid offsets for 3x3 pattern (x and z axes)
+            const offsets = [-2, -1, 0, 1, 2]; // 5x5
+
+            // Iterate over x and z axes to create flat grid
+            for (const xOffset of offsets) {
+                for (const zOffset of offsets) {
+                    const point = {
+                        x: source.x + xOffset,
+                        y: source.y - 0.1,
+                        z: source.z + zOffset
+                    };
+
+                    const block = this.bot.blockAt(new Vec3(point.x, point.y, point.z));
+
+                    if (!block) continue;
+
+                    const [dx, dz] = block.shapes[0] 
+                        ? [Math.abs(block.shapes[0][0] - block.shapes[0][3]), Math.abs(block.shapes[0][2] - block.shapes[0][5])] 
+                        : [0, 0];
+
+                    if (!['air','web','lava','water'].includes(block.name) && 
+                        block.boundingBox != 'empty' && 
+                        dx > this.bot.entity.width && 
+                        dz > this.bot.entity.width) {
+                        results.push(block.position.offset(0,1,0));
+                    }
+                }
+            }
+
+            return results;
+        }
         getJumpVelocity(source, target) {
             const Y_FIX = 0.42;
-            const MAX_HORIZONTAL_VELOCITY = 0.6;
+            const MAX_HORIZONTAL_VELOCITY = 60;
             const GRAVITY = 0.08;
 
             const dx = target.x - source.x;
@@ -113,19 +152,78 @@ module.exports = function attach(bot) {
 
             return [vx, Y_FIX, vz];
         }
+        getStrafePoint(source, target) { // doo doo dogshit, triangle 3 points cycle better
+            const planes = this.getSolidBlocks(target);
+            // Function to calculate distance between two points (ignoring y-axis)
+            function horizontalDistance(p1, p2) {
+                const dx = p1.x - p2.x;
+                const dz = p1.z - p2.z;
+                return Math.sqrt(dx * dx + dz * dz);
+            }
+          
+            // Function to check if a point is within a plane
+            function isPointInPlane(point, planeCenter) {
+                return point.x >= planeCenter.x - 0.5 && point.x <= planeCenter.x + 0.5 &&
+                       point.z >= planeCenter.z - 0.5 && point.z <= planeCenter.z + 0.5 &&
+                       point.y === planeCenter.y;
+            }
+          
+            // Function to check if a point meets distance requirements
+            function meetsDistanceRequirements(point, source, target) {
+                const distToSource = horizontalDistance(point, source);
+                const distToTarget = horizontalDistance(point, target);
+
+                return distToSource > 2 && distToTarget > 1 && 
+                       distToSource <= 3 && distToTarget <= 3;
+            }
+          
+            // Try each plane center as a potential solution
+            for (const center of planes) {
+                // Check the plane center itself first
+                if (isPointInPlane(center, center) && 
+                    meetsDistanceRequirements(center, source, target)) {
+                    return center;
+                }
+              
+                // Search around the plane using grid approach
+                const steps = 20; // Increased resolution for better coverage
+                const stepSize = 1 / steps; // Step size in units
+
+                // Generate candidate points within the plane bounds
+                for (let i = 0; i <= steps; i++) {
+                    for (let j = 0; j <= steps; j++) {
+                        const candidate = {
+                            x: center.x - 0.5 + i * stepSize,
+                            y: center.y,
+                            z: center.z - 0.5 + j * stepSize
+                        };
+                      
+                        // Use isPointInPlane to verify the candidate is within bounds
+                        if (isPointInPlane(candidate, center) && 
+                            meetsDistanceRequirements(candidate, source, target)) {
+                            return new Vec3(candidate.x, candidate.y, candidate.z);
+                        }
+                    }
+                }
+            }
+          
+            // If no valid point found in any plane
+            return null;
+        }
+
         async isInWater(point) { // true height at prop 0: 0.875,  change height flowing water: _properties: { level: 2 },
           // all player bounding box corners  needst to touch water -0.01 inside
             const yPlane = point.y - 0.125;
             const corners = [
-                new Vec3(point.x - 0.5, yPlane, point.z - 0.5),
-                new Vec3(point.x - 0.5, yPlane, point.z + 0.5),
-                new Vec3(point.x + 0.5, yPlane, point.z - 0.5),
-                new Vec3(point.x + 0.5, yPlane, point.z + 0.5)
+                new Vec3(point.x - 0.49, yPlane, point.z - 0.49),
+                new Vec3(point.x - 0.49, yPlane, point.z + 0.49),
+                new Vec3(point.x + 0.49, yPlane, point.z - 0.49),
+                new Vec3(point.x + 0.49, yPlane, point.z + 0.49)
             ];
           
             for (const corner of corners) {
-                const block = bot.blockAt(corner);
-                if (block?.name !== 'water' && block?.name !== 'lava') {
+                const block = this.bot.blockAt(corner);
+                if (!['water','lava'].includes(block?.name)) {
                     return false;
                 }
             }
@@ -141,8 +239,8 @@ module.exports = function attach(bot) {
                     const x = point.x + dx;
                     const z = point.z + dz;
 
-                    const blockTop = bot.blockAt(new Vec3(x, yTop, z));
-                    const blockBottom = bot.blockAt(new Vec3(x, yBottom, z));
+                    const blockTop = this.bot.blockAt(new Vec3(x, yTop, z));
+                    const blockBottom = this.bot.blockAt(new Vec3(x, yBottom, z));
 
                     if (blockTop.boundingBox === 'empty' && blockBottom.boundingBox === 'empty') return true;
 
@@ -151,14 +249,10 @@ module.exports = function attach(bot) {
 
                     let [dxTop, dzTop] = [0, 0];
                     let [dxBottom, dzBottom] = [0, 0];
-
-                    if (shapeTop) {
-                        [dxTop, dzTop] = [Math.abs(shapeTop[0] - shapeTop[3]), Math.abs(shapeTop[2] - shapeTop[5])];
-                    }
-
-                    if (shapeBottom) {
-                        [dxBottom, dzBottom] = [Math.abs(shapeBottom[0] - shapeBottom[3]), Math.abs(shapeBottom[2] - shapeBottom[5])];
-                    }
+                    
+                    const getDimensions = (shape) => [Math.abs(shape[0] - shape[3]), Math.abs(shape[2] - shape[5])];
+                    if (shapeTop) [dxTop, dzTop] = getDimensions(shapeTop);
+                    if (shapeBottom) [dxBottom, dzBottom] = getDimensions(shapeBottom);
 
                     if ((dxTop < this.bot.entity.width || dzTop < this.bot.entity.width) && (dxBottom < this.bot.entity.width || dzBottom < this.bot.entity.width)) return true;
                 }
@@ -170,69 +264,6 @@ module.exports = function attach(bot) {
     return bot;
 }
 /*
-function isInCylinder([px, py, pz], { center: [cx, cy, cz], radius, height }) {
-  const withinHeight = py >= cy && py <= cy + height;
-  const withinRadius = (px - cx) ** 2 + (pz - cz) ** 2 <= radius ** 2;
-  return withinHeight && withinRadius;
-}
-function getDeltaHealth() {
-  if (oldHealth === 0) {
-    oldHealth = (bot.health+bot.entity?.metadata[11]);
-  } else if (oldHealth != 0) {
-    newHealth = (bot.health+bot.entity?.metadata[11]);
-    if ((oldHealth-newHealth) > 1) deltaHealth = oldHealth - newHealth;
-    oldHealth = 0;
-    newHealth = 0;
-  }
-}
-/////
-function getStrafeVelocity(position, angleDegrees, speed) {
-  const [targetX, targetZ] = position;
-  const dx = targetX - bot.entity.position.x;
-  const dz = targetZ - bot.entity.position.z;
-  const length = Math.hypot(dx, dz) || 999;
-  const angle = angleDegrees * (Math.PI / 180);
-  if (length === 999) return [Math.random() * 20 - 10, Math.random() * 20 - 10];
-  const cosA = Math.cos(angle), sinA = Math.sin(angle);
-  const velocityX = ((dx / length) * cosA - (dz / length) * sinA) * speed;
-  const velocityZ = ((dx / length) * sinA + (dz / length) * cosA) * speed;
-  return [velocityX, velocityZ];
-}
-function getPearlTrajectory(distance) {
-  const g = 1.6, velocity = 10; // m/s
-  const sineTheta = (g * distance) / (velocity ** 2);
-  if (Math.abs(sineTheta) > 1) throw new Error(`${status.error}Distance too far for initial velocity.`);
-  return distance * Math.sin(0.5 * Math.asin(sineTheta));
-}
-function getFeatherTrajectory(distance) {
-  const g = 1.6, velocity = 35; // m/s
-  const sineTheta = (g * distance) / (velocity ** 2);
-  if (Math.abs(sineTheta) > 1) throw new Error(`${status.error}Distance too far for initial velocity.`);
-  return distance * Math.sin(0.5 * Math.asin(sineTheta));
-}
-function floorVec3(vec3) {
-  return {
-      x: Math.floor(vec3.x),
-      y: Math.floor(vec3.y),
-      z: Math.floor(vec3.z)
-  };
-}
-function roundVec3(vec3) {
-  return {
-      x: Math.round(vec3.x),
-      y: Math.round(vec3.y),
-      z: Math.round(vec3.z)
-  };
-}
-function getMidpointVec3(point1,point2) {
-  return {
-    x: (point1.x + point2.x) / 2,
-    y: (point1.y + point2.y) / 2,
-    z: (point1.z + point2.z) / 2
-  };
-}
-
-
 /////////
 function isInBlock(entity, block, hitboxHeight = 1.8, hitboxWidth = 0.3) {
   // Convert block to an array if it's not already

@@ -102,8 +102,7 @@ module.exports = function attach(bot) {
                     this.bot.pupa_inventory.equipPearl();
                     }
                     break;
-                case /^test$/.test(data):
-                    
+                case /^testa$/.test(data):
                     try {
                         const target = this.bot.players['Patr10t'].entity.position;
                         const velocity = this.bot.pupa_utils.getJumpVelocity(this.bot.entity.position, target);
@@ -112,10 +111,42 @@ module.exports = function attach(bot) {
                     } catch (error) {
                         ui.log(`{red-fg}[pupa_utils]{/} setting bot.entity.velocity FAILED ${this.bot.entity.position}  ${this.bot.players['Patr10t'].entity.position}`);
                     }
-                    
-                    
                     break;
+                case /^testb$/.test(data):
+                    try {
+                        const solids = this.bot.pupa_utils.getSolidBlocks(this.bot.entity.position)//.x, this.bot.entity.position.y, this.bot.entity.position.z);
+                        ui.log(`{green-fg}[pupa_utils]{/} Solids: ${solids}`);
+                    } catch (error) {
+                        ui.log(`{red-fg}[pupa_utils]{/} getSolidBlocks failed, source: ${this.bot.entity.position}`);
+                    }
+                    break;
+                case /^testc$/.test(data):
+                    try {
+                        const botPos = this.bot.entity.position;
+                        const tarPos = this.bot.players['Patr10t'].entity.position;
 
+                        const strafe = this.bot.pupa_utils.getStrafePoint(botPos, tarPos);
+                        ui.log(`{green-fg}[pupa_utils]{/} getStrafePoint ${util.inspect(strafe)}`);
+
+                        const velocity = this.bot.pupa_utils.getJumpVelocity(botPos, strafe);
+                        ui.log(`{green-fg}[pupa_utils]{/} getJumpVelocity ${util.inspect(velocity)}`);
+
+
+                        //this.bot.entity.velocity.set(1,0.42,1);
+                        this.bot.entity.velocity.set(velocity[0], velocity[1], velocity[2]);
+
+                        await this.bot.waitForTicks(20);
+                        ui.log(`
+{blue-fg}[pupa_utils]{/} original pos: ${botPos}
+{blue-fg}[pupa_utils]{/} new pos: ${this.bot.entity.position} 
+{blue-fg}[pupa_utils]{/} target pos: ${strafe}`);
+                    } catch (error) {
+                        ui.log(`
+{red-fg}[pupa_utils]{/} getStrafePoint failed
+{red-fg}[pupa_utils]{/} source: ${this.bot.entity.position}
+{red-fg}[pupa_utils]{/} target ${this.bot.players['Patr10t'].entity.position}`);
+                    }
+                    break;
                 /* PATHFIND */
                 /*
                 case /^goto -?\d*\s?-?\d*\s?-?\d*$/.test(data): 

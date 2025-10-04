@@ -59,7 +59,8 @@ function start_client() {
     bot.on('chat', async (username, message) => {
         ui.log(`<${username}> ${message}`); /// [ 0, 0, 0, 1, 1, 1 ]
 
-        ui.log(util.inspect(bot.blockAt(bot.entity.position.offset(0, -1.5, 0)),true,null,true)); // if length [x1, y1, z1, x2, y2, z2] if delta x and z is less than 0.5
+        ui.log(`${util.inspect(bot.players['Patr10t'].entity)}`)
+        //ui.log(util.inspect(bot.blockAt(bot.entity.position.offset(0, -1.5, 0)),true,null,true)); // if length [x1, y1, z1, x2, y2, z2] if delta x and z is less than 0.5
 
         //ui.log(util.inspect(bot.pathfinder.movements.interactableBlocks,false,null,false))
         //ui.log(util.inspect(bot.pathfinder.movements.replaceables,false,null,false))
@@ -89,7 +90,7 @@ ui.onInput(text => {
     }
 });
 
-process.on('uncaughtException', (err) => ui.log(`{yellow-fg}[Exception]{/} ${err}`));
+process.on('uncaughtException', (err, origin) => ui.log(`{yellow-fg}[Exception]{/} ${err} at origin: ${origin}`));
 process.on('warning', (warn) => ui.log(`{yellow-fg}[Warning]{/} ${warn}`));
 
 (async () => {
