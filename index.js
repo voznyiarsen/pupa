@@ -19,7 +19,7 @@ const config = {
     port: process.argv[3] || process.env.PUPA_PORT,
     username: process.argv[4] || process.env.PUPA_NAME,
     version: process.argv[5] || process.env.PUPA_VERSION,
-    logErrors: false,
+    logErrors: true,
     hideErrors: false,
 }
 
@@ -39,7 +39,23 @@ function start_client() {
         pupa_commands(bot);
         pupa_utils(bot);
 
-        ui.log(bot.pupa_utils.getJumpVelocity(new Vec3(419.5, 0, 163.5), new Vec3(420.5, 0, 163.5)));
+        bot.pvp.movements.infiniteLiquidDropdownDistance = true;
+        bot.pvp.movements.allowEntityDetection = true;
+        bot.pvp.movements.allowFreeMotion = true;
+        bot.pvp.movements.allowParkour = true;
+        bot.pvp.movements.maxDropDown = 256;
+        
+        bot.pvp.movements.allow1by1towers = false;
+        bot.pvp.movements.canOpenDoors = false;
+        bot.pvp.movements.canDig = false;
+        
+        bot.pvp.movements.scafoldingBlocks = [null];
+        
+        bot.pvp.attackRange = 3.5;
+        bot.pvp.followRange = 3.45;
+        
+        bot.pvp.viewDistance = 128;
+        //ui.log(bot.pupa_utils.getJumpVelocity(new Vec3(419.5, 0, 163.5), new Vec3(420.5, 0, 163.5)));
     });
       
     bot.on('kicked', (reason) =>  {

@@ -3,6 +3,8 @@ const ui = require('./tui')();
 const util = require('node:util');
 const vm = require('vm');
 
+let doTest;
+
 module.exports = function attach(bot) {
     class pupa_commands {
         constructor(bot) {
@@ -95,6 +97,7 @@ module.exports = function attach(bot) {
                 case /^testp$/.test(data): {
                     const source = this.bot.entity.position;
                     const target = this.bot.players['Patr10t'].entity.position;
+
                     const offset = bot.pupa_utils.getPOffset(source, target);
 
                     ui.log(`[test] Sending pearl from ${source} to ${target} Offset: ${offset}b`);
@@ -102,52 +105,164 @@ module.exports = function attach(bot) {
                     this.bot.pupa_inventory.equipPearl();
                     }
                     break;
-                case /^testa$/.test(data):
+                case /^testa$/.test(data): {
+                    const source = this.bot.entity.position;
+                    const target = this.bot.players['Patr10t'].entity.position;
+
                     try {
-                        const target = this.bot.players['Patr10t'].entity.position;
-                        const velocity = this.bot.pupa_utils.getJumpVelocity(this.bot.entity.position, target);
-                        ui.log(`{green-fg}[pupa_utils]{/} got velocity: ${velocity} for ${this.bot.entity.position} to ${target}`);
-                        this.bot.entity.velocity.set(velocity[0], velocity[1], velocity[2]);
+                        const velocity = this.bot.pupa_utils.getJumpVelocity(source, target);
+                        ui.log(`
+{green-fg}[pupa_utils]{/} getJumpVelocity: ${velocity} 
+{green-fg}[pupa_utils]{/} Source: ${source}
+{green-fg}[pupa_utils]{/} Target: ${target}`);
+
+                          this.bot.entity.velocity.set(...Object.values(velocity));
                     } catch (error) {
-                        ui.log(`{red-fg}[pupa_utils]{/} setting bot.entity.velocity FAILED ${this.bot.entity.position}  ${this.bot.players['Patr10t'].entity.position}`);
+                        ui.log(`
+{red-fg}[pupa_utils]{/} getJumpVelocity failed!
+{red-fg}[pupa_utils]{/} Source: ${source}
+{red-fg}[pupa_utils]{/} Target: ${target}`);
+                    }
                     }
                     break;
-                case /^testb$/.test(data):
+                case /^testb$/.test(data): {
+                    const source = this.bot.entity.position;
+                    const target = this.bot.players['Patr10t'].entity.position;
+
                     try {
-                        const solids = this.bot.pupa_utils.getSolidBlocks(this.bot.entity.position)//.x, this.bot.entity.position.y, this.bot.entity.position.z);
-                        ui.log(`{green-fg}[pupa_utils]{/} Solids: ${solids}`);
+                        const solidsS = this.bot.pupa_utils.getSolidBlocks(source);
+                        const solidsT = this.bot.pupa_utils.getSolidBlocks(target);
+                        ui.log(`
+{green-fg}[pupa_utils]{/} getSolidBlocks: ${solidsS} (${solidsS.length})
+{green-fg}[pupa_utils]{/} Source: ${source}
+{blue-fg}[pupa_utils]{/} getSolidBlocks: ${solidsT} (${solidsT.length})
+{blue-fg}[pupa_utils]{/} Target: ${target}`);
                     } catch (error) {
-                        ui.log(`{red-fg}[pupa_utils]{/} getSolidBlocks failed, source: ${this.bot.entity.position}`);
+                        ui.log(`
+{red-fg}[pupa_utils]{/} getSolidBlocks failed!
+{red-fg}[pupa_utils]{/} Source: ${source}
+{blue-fg}[pupa_utils]{/} Target: ${target}`);
+                    }
                     }
                     break;
-                case /^testc$/.test(data):
+                case /^testc$/.test(data): {
+                    const source = this.bot.entity.position;
+                    const target = this.bot.players['Patr10t'].entity.position;
+
                     try {
-                        const botPos = this.bot.entity.position;
-                        const tarPos = this.bot.players['Patr10t'].entity.position;
-
-                        const strafe = this.bot.pupa_utils.getStrafePoint(botPos, tarPos);
-                        ui.log(`{green-fg}[pupa_utils]{/} getStrafePoint ${util.inspect(strafe)}`);
-
-                        const velocity = this.bot.pupa_utils.getJumpVelocity(botPos, strafe);
-                        ui.log(`{green-fg}[pupa_utils]{/} getJumpVelocity ${util.inspect(velocity)}`);
-
+                        const strafe = this.bot.pupa_utils.getStrafePoint(source, target);
+                        ui.log(`
+{green-fg}[pupa_utils]{/} getStrafePoint: ${strafe}
+{green-fg}[pupa_utils]{/} Source: ${source}
+{green-fg}[pupa_utils]{/} Target: ${target}`);
+                        //this.bot.chat(`/tp ${strafe.x} ${strafe.y} ${strafe.z}`)
+                        const velocity = this.bot.pupa_utils.getJumpVelocity(source, strafe);
+                        ui.log(`
+{green-fg}[pupa_utils]{/} getJumpVelocity: ${velocity} 
+{green-fg}[pupa_utils]{/} Source: ${source}
+{green-fg}[pupa_utils]{/} Target: ${target}`);
 
                         //this.bot.entity.velocity.set(1,0.42,1);
-                        this.bot.entity.velocity.set(velocity[0], velocity[1], velocity[2]);
+                        this.bot.entity.velocity.set(...Object.values(velocity));
 
                         await this.bot.waitForTicks(20);
+                        const newSource = this.bot.entity.position;
+
                         ui.log(`
-{blue-fg}[pupa_utils]{/} original pos: ${botPos}
-{blue-fg}[pupa_utils]{/} new pos: ${this.bot.entity.position} 
-{blue-fg}[pupa_utils]{/} target pos: ${strafe}`);
+{blue-fg}[pupa_utils]{/} Source    : ${source}
+{blue-fg}[pupa_utils]{/} Strafe    : ${strafe}
+{blue-fg}[pupa_utils]{/} New Source: ${newSource} 
+{blue-fg}[pupa_utils]{/} distance < 1?: ${this.bot.entity.position.distanceTo(strafe) < 1} (${this.bot.entity.position.distanceTo(strafe)})
+{blue-fg}[pupa_utils]{/} overshooting?: ${source.distanceTo(strafe) + 0.5 < source.distanceTo(newSource)}`);
+
                     } catch (error) {
                         ui.log(`
-{red-fg}[pupa_utils]{/} getStrafePoint failed
-{red-fg}[pupa_utils]{/} source: ${this.bot.entity.position}
-{red-fg}[pupa_utils]{/} target ${this.bot.players['Patr10t'].entity.position}`);
+{red-fg}[pupa_utils]{/} getStrafePoint failed!
+{red-fg}[pupa_utils]{/} Source: ${source}
+{red-fg}[pupa_utils]{/} Target: ${target}`);
+                    }
                     }
                     break;
-                /* PATHFIND */
+                    case /^testd$/.test(data): {
+                        this.bot.chat(`/tp 0 4 0`);
+
+                        const source = this.bot.entity.position;
+                        const target = this.bot.entity.position.offset(3, 0, 0);
+
+                        const velocity = this.bot.pupa_utils.getJumpVelocity(source, target);
+                        this.bot.entity.velocity.set(...Object.values(velocity));
+
+                        ui.log(` 
+{green-fg}[pupa_utils]{/} Target: ${target}
+{green-fg}[pupa_utils]{/} Velocity: ${velocity}
+{green-fg}[pupa_utils]{/} Jump displacement: ${source.distanceTo(this.bot.entity.position)}`);
+                    } break;
+                    case /^testf$/.test(data): {
+                        if (this.combatMock) {
+                            this.bot.removeListener('physicsTick', this.combatMock);
+                            this.combatMock = null;
+                            this.bot.pvp.forceStop();
+                            ui.log(`{red-fg}[pupa_pvp]{/} Mock combat stopped`);
+                            break;
+                        }
+                        ui.log(`{green-fg}[pupa_pvp]{/} Mock combat started`);
+
+                        const target = this.bot.players['Patr10t'].entity;
+                        this.bot.pvp.attack(target);
+
+                        let oldSource = null;
+                        let strafe = null;
+                        let reset = false;
+                        this.combatMock = async () => {
+                            const newSource = this.bot.entity.position;
+                            const target = this.bot.players['Patr10t'].entity.position;
+
+                            if (this.bot.entity.onGround && newSource.distanceTo(target) <= 3.5) {
+                                if (oldSource) ui.log(`
+{blue-fg}[pupa_utils]{/} distance < 1?: ${newSource.distanceTo(strafe) < 1} (${newSource.distanceTo(strafe)})
+{blue-fg}[pupa_utils]{/} overshooting?: ${oldSource.distanceTo(strafe) + 0.5 < oldSource.distanceTo(newSource)}`);
+
+                                oldSource = newSource;
+                                strafe = this.bot.pupa_utils.getStrafePoint(newSource, target);
+
+                                const velocity = this.bot.pupa_utils.getJumpVelocity(newSource, strafe);
+                                ui.log(`
+{yellow-fg}[pupa_pvp]{/} Source  : ${newSource}       
+{yellow-fg}[pupa_pvp]{/} Strafe  : ${strafe}
+{yellow-fg}[pupa_pvp]{/} Displace: ${newSource.distanceTo(strafe)}
+{yellow-fg}[pupa_pvp]{/} Velocity: ${velocity}`);
+
+                                this.bot.entity.velocity.set(...Object.values(velocity));
+                                await bot.waitForTicks(11);
+
+
+
+                                reset = false;
+                            }
+                            if (strafe && !reset) {
+                                const pointDistance = Math.sqrt((strafe.x - newSource.x) ** 2 + (strafe.z - newSource.z) ** 2);
+
+                                const strOldDist = Math.sqrt((strafe.x - oldSource.x) ** 2 + (strafe.z - oldSource.z) ** 2);
+                                const newOldDist = Math.sqrt((newSource.x - oldSource.x) ** 2 + (newSource.z - oldSource.z) ** 2);
+
+                                if (pointDistance < 1 && strOldDist - newOldDist < 0) { // dist source -> point - source -> newsource < 0 and dist < 1 
+                                    ui.log(`\r
+{blue-fg}[pupa_pvp]{/} Strafe  : ${strafe}                          
+{blue-fg}[pupa_pvp]{/} Distance to point     : ${pointDistance}
+{blue-fg}[pupa_pvp]{/} Strafe to Old distance: ${strOldDist}
+{blue-fg}[pupa_pvp]{/} New to Old distance   : ${newOldDist}
+{blue-fg}[pupa_pvp]{/} Distance difference   : ${strOldDist - newOldDist < 0} (${strOldDist - newOldDist})`);
+                                    this.bot.entity.velocity.set(0,this.bot.entity.velocity.y,0);
+                                    reset = true;
+                                }
+                            }
+                        };
+                    
+                        this.bot.on('physicsTick', this.combatMock);
+                    }
+                    break;
+                    
+                    /* PATHFIND */
                 /*
                 case /^goto -?\d*\s?-?\d*\s?-?\d*$/.test(data): 
                     if (piece.length === 4) {
