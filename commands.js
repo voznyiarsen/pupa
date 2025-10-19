@@ -3,8 +3,6 @@ const ui = require('./tui')();
 const util = require('node:util');
 const vm = require('vm');
 
-let doTest;
-
 module.exports = function attach(bot) {
     class pupa_commands {
         constructor(bot) {
@@ -94,7 +92,10 @@ module.exports = function attach(bot) {
                     ui.log(`{green-fg}[pupa_inventory]{/} Unequipping all equipped items...`);
                     this.bot.pupa_inventory.unequipAllItems();
                     break;
-                case /^testp$/.test(data): {
+                    /* TESTS
+
+                    */
+                case /^t1$/.test(data): {
                     const source = this.bot.entity.position;
                     const target = this.bot.players['Patr10t'].entity.position;
 
@@ -105,7 +106,7 @@ module.exports = function attach(bot) {
                     this.bot.pupa_inventory.equipPearl();
                     }
                     break;
-                case /^testa$/.test(data): {
+                case /^t2$/.test(data): {
                     const source = this.bot.entity.position;
                     const target = this.bot.players['Patr10t'].entity.position;
 
@@ -125,7 +126,7 @@ module.exports = function attach(bot) {
                     }
                     }
                     break;
-                case /^testb$/.test(data): {
+                case /^t3$/.test(data): {
                     const source = this.bot.entity.position;
                     const target = this.bot.players['Patr10t'].entity.position;
 
@@ -145,7 +146,7 @@ module.exports = function attach(bot) {
                     }
                     }
                     break;
-                case /^testc$/.test(data): {
+                case /^t4$/.test(data): {
                     const source = this.bot.entity.position;
                     const target = this.bot.players['Patr10t'].entity.position;
 
@@ -181,23 +182,44 @@ module.exports = function attach(bot) {
 {red-fg}[pupa_utils]{/} Source: ${source}
 {red-fg}[pupa_utils]{/} Target: ${target}`);
                     }
-                    }
-                    break;
-                    case /^testd$/.test(data): {
-                        this.bot.chat(`/tp 0 4 0`);
-
+                    } break;
+                    case /^t5$/.test(data): {
+                        // round up this.bot.entity.position and vel to it
                         const source = this.bot.entity.position;
                         const target = this.bot.entity.position.offset(3, 0, 0);
 
                         const velocity = this.bot.pupa_utils.getJumpVelocity(source, target);
-                        this.bot.entity.velocity.set(...Object.values(velocity));
+                        if (velocity) this.bot.entity.velocity.set(...Object.values(velocity));
 
                         ui.log(` 
 {green-fg}[pupa_utils]{/} Target: ${target}
 {green-fg}[pupa_utils]{/} Velocity: ${velocity}
 {green-fg}[pupa_utils]{/} Jump displacement: ${source.distanceTo(this.bot.entity.position)}`);
                     } break;
-                    case /^testf$/.test(data): {
+                    case /^t6$/.test(data): {
+                        const source = this.bot.entity.position;
+                        const liquid = this.bot.pupa_utils.isInLiquid(source);
+                        ui.log(`{green-fg}[pupa_utils]{/} isInLiquid: ${liquid}`);
+                    } break;
+                    case /^t7$/.test(data): {
+                        const source = this.bot.entity.position;
+                        const unwanted = this.bot.pupa_utils.isInUnwanted(source);
+                        ui.log(`{blue-fg}[pupa_utils]{/} isInUnwanted: ${unwanted}`);
+                        if (unwanted) {
+                            const flat = this.bot.pupa_utils.getFlatVelocity(source, unwanted, 180, 0.1); 
+                            ui.log(`{green-fg}[pupa_utils]{/} Applying vel: ${flat}`);
+                            this.bot.entity.velocity.set(...Object.values(flat));
+                        }
+                    } break;
+                    case /^t8$/.test(data): {
+                        const source = this.bot.entity.position;
+                        const target = this.bot.players['Patr10t'].entity.position;
+
+                        const velocity = this.bot.pupa_utils.getFlatVelocity(source, target, 180, 0.6);
+                        ui.log(`{green-fg}[pupa_utils]{/} getFlatVelocity: ${velocity}`);
+                        if (velocity) this.bot.entity.velocity.set(...Object.values(velocity));
+                    } break;
+                    case /^t9$/.test(data): {
                         if (this.combatMock) {
                             this.bot.removeListener('physicsTick', this.combatMock);
                             this.combatMock = null;
@@ -207,36 +229,31 @@ module.exports = function attach(bot) {
                         }
                         ui.log(`{green-fg}[pupa_pvp]{/} Mock combat started`);
 
-                        const target = this.bot.players['Patr10t'].entity;
-                        this.bot.pvp.attack(target);
-
                         let oldSource = null;
                         let strafe = null;
                         let reset = false;
                         this.combatMock = async () => {
                             const newSource = this.bot.entity.position;
-                            const target = this.bot.players['Patr10t'].entity.position;
+                            const entity = this.bot.players['Patr10t'].entity;
+                            const target = entity.position;
+
+                            this.bot.pvp.attack(entity);
 
                             if (this.bot.entity.onGround && newSource.distanceTo(target) <= 3.5) {
-                                if (oldSource) ui.log(`
-{blue-fg}[pupa_utils]{/} distance < 1?: ${newSource.distanceTo(strafe) < 1} (${newSource.distanceTo(strafe)})
-{blue-fg}[pupa_utils]{/} overshooting?: ${oldSource.distanceTo(strafe) + 0.5 < oldSource.distanceTo(newSource)}`);
+                                if (oldSource) ui.log(`{green-fg}[pupa_utils]{/} distance < 1?: ${newSource.distanceTo(strafe) < 1} (${newSource.distanceTo(strafe)})
+{green-fg}[pupa_utils]{/} ${oldSource.distanceTo(strafe) + 0.5 < oldSource.distanceTo(newSource) ? "Overshooting" : "Undershooting"}`);
 
                                 oldSource = newSource;
                                 strafe = this.bot.pupa_utils.getStrafePoint(newSource, target);
 
                                 const velocity = this.bot.pupa_utils.getJumpVelocity(newSource, strafe);
                                 ui.log(`
-{yellow-fg}[pupa_pvp]{/} Source  : ${newSource}       
+{yellow-fg}[pupa_pvp]{/} Source  : ${newSource}
 {yellow-fg}[pupa_pvp]{/} Strafe  : ${strafe}
 {yellow-fg}[pupa_pvp]{/} Displace: ${newSource.distanceTo(strafe)}
 {yellow-fg}[pupa_pvp]{/} Velocity: ${velocity}`);
 
                                 this.bot.entity.velocity.set(...Object.values(velocity));
-                                await bot.waitForTicks(11);
-
-
-
                                 reset = false;
                             }
                             if (strafe && !reset) {
@@ -245,10 +262,8 @@ module.exports = function attach(bot) {
                                 const strOldDist = Math.sqrt((strafe.x - oldSource.x) ** 2 + (strafe.z - oldSource.z) ** 2);
                                 const newOldDist = Math.sqrt((newSource.x - oldSource.x) ** 2 + (newSource.z - oldSource.z) ** 2);
 
-                                if (pointDistance < 1 && strOldDist - newOldDist < 0) { // dist source -> point - source -> newsource < 0 and dist < 1 
-                                    ui.log(`\r
-{blue-fg}[pupa_pvp]{/} Strafe  : ${strafe}                          
-{blue-fg}[pupa_pvp]{/} Distance to point     : ${pointDistance}
+                                if (pointDistance < 0.8 && strOldDist - newOldDist < 0) { // dist source -> point - source -> newsource < 0 and dist < 1 
+                                    ui.log(`{blue-fg}[pupa_pvp]{/} Distance to point     : ${pointDistance}
 {blue-fg}[pupa_pvp]{/} Strafe to Old distance: ${strOldDist}
 {blue-fg}[pupa_pvp]{/} New to Old distance   : ${newOldDist}
 {blue-fg}[pupa_pvp]{/} Distance difference   : ${strOldDist - newOldDist < 0} (${strOldDist - newOldDist})`);
@@ -259,9 +274,13 @@ module.exports = function attach(bot) {
                         };
                     
                         this.bot.on('physicsTick', this.combatMock);
-                    }
-                    break;
-                    
+                    } break;
+                    case /^t10$/.test(data): {
+                        this.bot.on('physicsTick', this.bot.pupa_pvp.doDecide)
+                    } break;
+                    case /^t11$/.test(data): {
+                        ui.log(util.inspect(this.bot.registry.liquids,true,null,true));
+                    } break;
                     /* PATHFIND */
                 /*
                 case /^goto -?\d*\s?-?\d*\s?-?\d*$/.test(data): 

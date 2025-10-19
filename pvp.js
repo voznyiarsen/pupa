@@ -1,3 +1,4 @@
+const ui = require('./tui')();
 
 const { Vec3 } = require('vec3');
 
@@ -6,7 +7,7 @@ module.exports = function attach(bot) {
         allies = [];
         enemies = [];
 
-        mode = 0;
+        mode = 2;
 
         constructor(bot) {
             this.bot = bot;
@@ -14,23 +15,11 @@ module.exports = function attach(bot) {
         
         setMode(mode) {
             this.mode++;
-            if (this.mode > 4) this.mode = 0;
+            if (this.mode > 2) this.mode = 0;
             if (mode) this.mode = mode;
         }
-        /* // Looking handled internaly, rewrite to have lambda/kami blue-like viewlock
-        isInRange() { // 3
-            if (this.bot.pvp.target.entity.position.distanceTo(this.bot.entity.position) <= this.bot.pvp.attackRange && !this.bot.pathfinder.isMoving()) {
-                this.bot.lookAt(this.bot.pvp.target.position.offset(0, 1.6, 0), true);
-            }
-        }
-        */
-        isNearWeb() {
-            const web = this.bot.findBlocks({
-                point: this.bot.pvp.target.entity.position,
-                matching: this.bot.registry.blocksByName
-            })
-        }
-        getTargetFilter() {
+        
+        getTargetFilter = () => {
             switch (this.mode) {
                 case 0:
                     return e => e.type === 'mob' &&
@@ -43,36 +32,89 @@ module.exports = function attach(bot) {
                                 e.position.distanceTo(this.bot.entity.position) <= 128;
                 case 2: 
                     return e => e.type === 'player' &&
-                                this.bot.players[e.username]?.gamemode === 0 && 
                                 !this.allies.includes(e.username) &&
-                                (isInCylinder([e.position.x, e.position.y, e.position.z], cylinder1) || 
-                                 isInCylinder([e.position.x, e.position.y, e.position.z], cylinder2)) &&
                                 e.position.distanceTo(this.bot.entity.position) < 128;
-                case 3:
-                    return e => e.type === 'player' && 
-                                e.username === (this.allies[0]) &&
-                                e.position.distanceTo(this.bot.entity.position) <= 128;
-                case 4:
-                    return;
                 default:
                     return null;
             }
         }
-    } // add worker threads
 
-    
+        doDecide = () => {
+            //this.doUpdate();
+            //if (!this.bot.pvp.target) return;
+            //this.doStrafe();
+            //this.doAvoid();
+            this.doFloat();
+        }
+
+        doFloat = () => {
+            const liquid = this.bot.pupa_utils.isInLiquid(this.bot.entity.position);
+            if (liquid) {
+              this.bot.entity.velocity.set(this.bot.entity.velocity.x,0.01,this.bot.entity.velocity.z);
+            } 
+        }
+/*
+###
+WURST 
+MinecraftClient = MC
+net.minecraft.client.MinecraftClient is fabric
+###
+0.04 to float up
+CHECK submerged, + touching
+
+submerged = 1.62 height water 
+*/
+
+
+        doAvoid = () => {
+            const unwanted = this.bot.pupa_utils.isInUnwanted(this.bot.entity.position);
+            if (unwanted) {
+                const velocity = this.bot.pupa_utils.getFlatVelocity(this.bot.entity.position, unwanted, 180);
+                this.bot.entity.velocity.set(...Object.values(velocity));
+            }
+        }
+
+        doUpdate = () => {
+            const target = this.bot.nearestEntity(this.getTargetFilter(this.mode));
+            if (target) this.bot.pvp.attack(target); else this.bot.pvp.forceStop();
+        }
+
+        hasJumped = false;
+        sourceOld = null;
+        strafe = null;
+
+        doStrafe = () => {
+            const source = this.bot.entity?.position;
+            const target = this.bot.pvp.target.position;
+
+            if (this.bot.entity.onGround && source.distanceTo(target) <= 3.5) {
+                this.strafe = this.bot.pupa_utils.getStrafePoint(source, target);
+                
+                const velocity = this.bot.pupa_utils.getJumpVelocity(source, this.strafe);
+                if (velocity) {
+                    this.sourceOld = source;
+                    this.bot.entity.velocity.set(...Object.values(velocity));
+                    this.hasJumped = true;
+                }
+            }
+            if (this.strafe && this.hasJumped) {
+                const getDistance = (a, b) => Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
+                
+                const strafeToSource = getDistance(this.strafe, source);
+                const strafeToSourceOld = getDistance(this.strafe, this.sourceOld);
+                const displacement = getDistance(source, this.sourceOld);
+                
+                if (strafeToSource < 0.8 && strafeToSourceOld - displacement < 0) { // dist source -> point - source -> newsource < 0 and dist < 1 
+                    this.hasJumped = false;
+                    this.bot.entity.velocity.set(0,this.bot.entity.velocity.y,0);
+                }
+            }
+        }
+    } // add worker threads    
     bot.pupa_pvp = new pupa_pvp(bot)
     return bot;
 }
 /*
-function updateTarget() {
-  entity = bot.nearestEntity(filterTarget());
-
-  if (!entity) {
-    bot.pvp.forceStop();
-  }
-}
-
 function combatMovement() {
     if (!this.entity) return;
 
@@ -100,41 +142,4 @@ function combatLoop() {
     this.combatMovement();
     this.combatTargeting(); 
     this.combatAttacking(); 
-  }
-
-function strafeMovement() {
-  if (!this.entity) return;
-  // 1.5 strafe speed 0.6 distance max 
-   //Get blocks near entities 
-  this.entityBlock = blocksNear(this.entity, 'web', 3, 1);
-  this.botBlock = blocksNear(this.bot.entity, 'web', 2, 2);
-  this.entityPos = [this.entity.position.x, this.entity.position.z];
-    
-  this.entityCloseToBlock = this.entityBlock[0] && this.entityBlock[0].distanceTo(this.entity.position) <= 1.5;
-  this.botCloseToBlock = this.botBlock[0] && this.botBlock[0].distanceTo(this.bot.entity.position) <= 1.2;
-  
-  this.bot.pvp.followRange = (this.entityCloseToBlock || this.botCloseToBlock || this.preventFall(this.entity)) || this.bot.entity.isInWeb ? 1 : 5;
-
-  if (!this.isOverLiquid && this.bot.entity.onGround && this.bot.entity.position.distanceTo(this.entity.position) <= this.bot.pvp.followRange && this.bot.pvp.followRange === 5) {
-    if (!this.entityBlock[0]) {
-      strafe(this.entityPos, 30, 0.6);
-    } else {
-      this.entityDistToBlock = this.entityBlock[0].distanceTo(this.entity.position);
-      this.strafeSpeed = this.entityDistToBlock >= 3.5 ? 0.6 : this.entityDistToBlock > 1.5 ? 0.4 : null;
-      if (this.strafeSpeed) {
-        strafe(this.entityPos, 30, this.strafeSpeed);
-      }
-    }
-  }
-}
-
-function preventFall(e) {
-  const b = this.bot.findBlocks({
-    point: e.position.offset(0, -1.5, 0),
-    matching: this.bot.registry.blocksByName.air.id,
-    maxDistance: 0,
-    count: 2,
-  });
-  // if blocks lower than bot and block 1 lower than 2 y and bloc 1 x eq bloc 2 x and z
-  return (b[0].y < e.position.y && b[1].y < e.position.y && b[0].y < b[1].y && b[0].x === b[1].x && b[0].z === b[1].z);
-}*/
+  }*/

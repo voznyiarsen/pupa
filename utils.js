@@ -9,13 +9,12 @@ module.exports = function attach(bot) {
         1.62 block height to head base for target entity.eyeHeight
         */
         /*  START 
-            PROJECTILES         
+            PROJECTILE MOTION         
         */
-        getPOffset(source, target) {
+        getProjectileOffset(source, target, velocity = 10) {
             const [x1, y1, z1] = [source.x, source.y, source.z];
             const [x2, y2, z2] = [target.x, target.y, target.z];
 
-            const v0 = 10;
             const gravity = 1.6;
 
             const distance = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
@@ -25,7 +24,7 @@ module.exports = function attach(bot) {
                 return dy >= 0 ? [Infinity] : [-Infinity];
             }
 
-            const v0Squared = v0 * v0;
+            const v0Squared = velocity * velocity;
             const discriminant = v0Squared * v0Squared - gravity * (gravity * distance * distance + 2 * dy * v0Squared);
 
             if (discriminant < 0) {
@@ -46,10 +45,10 @@ module.exports = function attach(bot) {
             return offset2; // [offset1, offset2]; /* High Arc / Low Arc */
         }
         /*  END 
-            PROJECTILES         
+            PROJECTILE MOTION         
         */
         /*  START 
-            AREA CALCULATION
+            POINT IN POLYGON
         */
         isInCylinder(source, point, radius, height) {
             const dy = point.y - source.y;
@@ -73,206 +72,66 @@ module.exports = function attach(bot) {
                 source[2] >= minZ && source[2] <= maxZ
             );
         }
-        /*  END 
-            AREA CALCULATION
-        */
-        /*  START
-            MOVEMENT
-        */
-        recentStrafePoints = [];
-        maxRecentPoints = 1;
-/* 
-  Jump when chasing
-  True centre of a block is +0.5 x and z
-  if within 0.1 area of point set V to 0
-*/
-        getStrafePoint(source, target) {
-            function distance2D(a, b) {
-                return Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
-            }
+        isInUnwanted(source, height = 1.8, offset = 0.3) {
+            const offsets = [offset, offset + 0.0625];
 
-            const solids = this.getSolidBlocks(target);
-        
-            for (const point of solids) {
-                const distToTarget = distance2D(point, target); // distance to point -> target 
-                if (distToTarget >= 3.5 /*&& distToTarget <= 1*/) continue; 
+            for (let off of offsets) {
+                for (let layer = 0; layer < 2; layer++) {
+                    const layerY = source.y + (layer * height / 2);
+                
+                    for (let corner = 0; corner < 4; corner++) {
+                        const point = new Vec3(
+                            source.x + (corner % 2 ? off : -off), 
+                            layerY, 
+                            source.z + (corner < 2 ? -off : off)
+                        );
 
-                const distToSource = distance2D(point, source);
-                if (distToSource >= 3.5 /*&& distToSource <= 1*/) continue;
-
-                let tooCloseToRecent = false;
-                for (const recentPoint of this.recentStrafePoints) {
-                    const distToRecent = distance2D(point, recentPoint);
-                    if (distToRecent <= 1) {
-                        tooCloseToRecent = true;
-                        break;
-                    }
-                }
-                if (tooCloseToRecent) continue;
-            
-                this.recentStrafePoints.push(point);
-                if (this.recentStrafePoints.length > this.maxRecentPoints) {
-                    this.recentStrafePoints.shift();
-                }
-
-                return point;
-            }
-            return null;
-        }
-        getSolidBlocks(source) {
-            const solids = [];
-            const offsets = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
-
-            for (const xOffset of offsets) {
-                for (const zOffset of offsets) {
-                    // Start from the source Y position and search downward
-                    let foundSolid = false;
-                    for (let y = Math.floor(source.y); y >= source.y - 2 && !foundSolid; y--) {
-                        const point = new Vec3(source.x + xOffset, y, source.z + zOffset);
                         const block = this.bot.blockAt(point);
-
-                        if (!block) continue;
-
-                        const [dx, dz] = block.shapes[0] 
-                            ? [Math.abs(block.shapes[0][0] - block.shapes[0][3]), Math.abs(block.shapes[0][2] - block.shapes[0][5])] 
-                            : [0, 0];
-
-                        if (!['air','web','lava','water'].includes(block.name) && 
-                            block.boundingBox != 'empty' && 
-                            dx > this.bot.entity.width && 
-                            dz > this.bot.entity.width) {
-                            const yOffset = Math.abs(block.shapes[0][1] - block.shapes[0][4])
-                            solids.push(block.position.offset(0.5,yOffset,0.5));
-                            foundSolid = true;
+                    
+                        if (block && ['water', 'lava', 'web', 'cactus'].includes(block.name) || block && block.boundingBox != 'empty' && off === 0.3) {
+                            return block.position.offset(0.5, 0, 0.5);
                         }
                     }
                 }
             }
-            return solids;
+            return false;
         }
-getJumpVelocity(source, target, angleDegrees = 0, speed = 0.6548) {
-    const dx = target.x - source.x;
-    const dz = target.z - source.z;
-    const length = Math.hypot(dx, dz);
-
-    if (length === 0) {
-        return new Vec3(Math.random() * 20 - 10, 0.42, Math.random() * 20 - 10);
-    }
-
-    const angle = angleDegrees * (Math.PI / 180);
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
-
-    const dirX = dx / length;
-    const dirZ = dz / length;
-
-    const vx = (dirX * cosA - dirZ * sinA) * speed;
-    const vz = (dirX * sinA + dirZ * cosA) * speed;
-
-    return new Vec3(vx, 0.42, vz);
-}
-// Example usage:
-/*
-const source = { x: 0, z: 0 };
-const target = { x: 2.5, z: 0 };
-const result = calculateInitialVelocity(source, target);
-console.log(result);
-*/
-        /*
-        getJumpVelocity(source, target, angleDegrees = 0, speed = 0.3274*2) {
-            const dx = target.x - source.x;
-            const dz = target.z - source.z;
-
-            const length = Math.hypot(dx, dz) || null;
-            const angle = angleDegrees * (Math.PI / 180);
-            if (length === null) {
-                return new Vec3(Math.random() * 20 - 10, 0.42, Math.random() * 20 - 10);
-            } 
-            const cosA = Math.cos(angle), sinA = Math.sin(angle);
-            const vx = ((dx / length) * cosA - (dz / length) * sinA) * speed;
-            const vz = ((dx / length) * sinA + (dz / length) * cosA) * speed;
-            return new Vec3(vx, 0.42, vz);
+        // true height at prop 0: 0.875,  change height flowing water: _properties: { level: 2 },
+        // PS: no?
+        //
+        isSubInLiquid(source, height = 1.8, width = 0.6) {
+            const liquids = new Set();
+            liquids.add(this.bot.registry.blocksByName.water.id);
+            liquids.add(this.bot.registry.blocksByName.lava.id);
+            for (let x of [-width/2, width/2]) {
+                for (let z of [-width/2, width/2]) {
+                    const block = this.bot.blockAt(new Vec3(source.x + x, source.y + height, source.z + z));
+                    if (block && liquids.has(block.id)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        isInLiquid(source, height = 1.8, width = 0.6) {
+            const liquids = new Set();
+            liquids.add(this.bot.registry.blocksByName.water.id);
+            liquids.add(this.bot.registry.blocksByName.lava.id);
+            for (let x of [-width/2, width/2]) {
+                for (let z of [-width/2, width/2]) {
+                    for (let y of [0, height/2, height]) {
+                        const block = this.bot.blockAt(new Vec3(source.x + x, source.y + y, source.z + z));
+                        if (block && liquids.has(block.id)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
         }
         /*  END
-            MOVEMENT
+            POINT IN POLYGON
         */
-        /*getStrafePoint(source, target) { // doo doo dogshit, triangle 3 points cycle better
-            const planes = this.getSolidBlocks(target);
-            // Function to calculate distance between two points (ignoring y-axis)
-            function horizontalDistance(p1, p2) {
-                const dx = p1.x - p2.x;
-                const dz = p1.z - p2.z;
-                return Math.sqrt(dx * dx + dz * dz);
-            }
-          
-            // Function to check if a point is within a plane
-            function isPointInPlane(point, planeCenter) {
-                return point.x >= planeCenter.x - 0.5 && point.x <= planeCenter.x + 0.5 &&
-                       point.z >= planeCenter.z - 0.5 && point.z <= planeCenter.z + 0.5 &&
-                       point.y === planeCenter.y;
-            }
-          
-            // Function to check if a point meets distance requirements
-            function meetsDistanceRequirements(point, source, target) {
-                const distToSource = horizontalDistance(point, source);
-                const distToTarget = horizontalDistance(point, target);
-
-                return distToSource > 2 && distToTarget > 1 && 
-                       distToSource <= 3 && distToTarget <= 3;
-            }
-          
-            // Try each plane center as a potential solution
-            for (const center of planes) {
-                // Check the plane center itself first
-                if (isPointInPlane(center, center) && 
-                    meetsDistanceRequirements(center, source, target)) {
-                    return center;
-                }
-              
-                // Search around the plane using grid approach
-                const steps = 20; // Increased resolution for better coverage
-                const stepSize = 1 / steps; // Step size in units
-
-                // Generate candidate points within the plane bounds
-                for (let i = 0; i <= steps; i++) {
-                    for (let j = 0; j <= steps; j++) {
-                        const candidate = {
-                            x: center.x - 0.5 + i * stepSize,
-                            y: center.y,
-                            z: center.z - 0.5 + j * stepSize
-                        };
-                      
-                        // Use isPointInPlane to verify the candidate is within bounds
-                        if (isPointInPlane(candidate, center) && 
-                            meetsDistanceRequirements(candidate, source, target)) {
-                            return new Vec3(candidate.x, candidate.y, candidate.z);
-                        }
-                    }
-                }
-            }
-          
-            // If no valid point found in any plane
-            return null;
-        }*/
-
-        async isInWater(point) { // true height at prop 0: 0.875,  change height flowing water: _properties: { level: 2 },
-          // all player bounding box corners  needst to touch water -0.01 inside
-            const yPlane = point.y - 0.125;
-            const corners = [
-                new Vec3(point.x - 0.49, yPlane, point.z - 0.49),
-                new Vec3(point.x - 0.49, yPlane, point.z + 0.49),
-                new Vec3(point.x + 0.49, yPlane, point.z - 0.49),
-                new Vec3(point.x + 0.49, yPlane, point.z + 0.49)
-            ];
-          
-            for (const corner of corners) {
-                const block = this.bot.blockAt(corner);
-                if (!['water','lava'].includes(block?.name)) {
-                    return false;
-                }
-            }
-            return true;
-        }
         async isNearPassable(point) { //boundingBox: empty
             const yTop = point.y - 0.5;
             const yBottom = yTop - 1;
@@ -303,6 +162,169 @@ console.log(result);
             }
             return false;
         }
+        /*  END 
+            AREA CALCULATION
+        */
+        /*  START
+            MOVEMENT
+        */
+        recentPoints = [];
+        recentPointsMax = 1;
+/* 
+  Jump when chasing? (A* it?)
+  True centre of a block is +0.5 x and z
+  if within 0.1 area of point set V to 0
+*/
+        getStrafePoint(source, target) {
+            function distance2D(a, b) {
+                return Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
+            }
+
+            const solids = this.getSolidBlocks(target);
+        
+            for (const point of solids) {
+                const distToTarget = distance2D(point, target); // distance to point -> target 
+                if (distToTarget >= 3.5 /*&& distToTarget <= 1*/) continue; 
+
+                const distToSource = distance2D(point, source);
+                if (distToSource >= 3.5 /*&& distToSource <= 1*/) continue;
+
+                let isValid = true;
+                for (const recentPoint of this.recentPoints) {
+                    const distToRecent = distance2D(point, recentPoint);
+                    if (distToRecent <= 1) {
+                        isValid = false;
+                        break;
+                    }
+                }
+                if (!isValid) continue;
+            
+                this.recentPoints.push(point);
+                if (this.recentPoints.length > this.recentPointsMax) {
+                    this.recentPoints.shift();
+                }
+
+                return point;
+            }
+            return null;
+        }
+/*
+        getSolidBlocks(source) {
+            const solids = new Set();
+
+            //const solids = [];
+
+            const offsets = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+
+            const radius = 2;
+
+            const badBlocks = new Set();
+            badBlocks.add(this.bot.registry.blocksByName.water.id);
+            badBlocks.add(this.bot.registry.blocksByName.lava.id);
+            badBlocks.add(this.bot.registry.blocksByName.air.id);
+            badBlocks.add(this.bot.registry.blocksByName.web.id);
+
+            for (let xOffset = -radius; xOffset <= radius; xOffset++) {
+                for (let zOffset = -radius; zOffset <= radius; zOffset++) {
+//            for (const xOffset of offsets) {
+//                for (const zOffset of offsets) {
+                    // Start from the source Y position and search downward
+                    let foundSolid = false;
+                    for (let y = Math.floor(source.y); y >= source.y - 2 && !foundSolid; y--) {
+                        const point = new Vec3(source.x + xOffset, y, source.z + zOffset);
+                        const block = this.bot.blockAt(point);
+
+                        if (!block) continue;
+
+                        const [dx, dz] = block.shapes[0] 
+                            ? [Math.abs(block.shapes[0][0] - block.shapes[0][3]), Math.abs(block.shapes[0][2] - block.shapes[0][5])] 
+                            : [0, 0];
+
+                        if (!badBlocks.has(block.id) && 
+                            block.boundingBox != 'empty' && 
+                            dx > this.bot.entity.width && 
+                            dz > this.bot.entity.width) {
+                            const yOffset = Math.abs(block.shapes[0][1] - block.shapes[0][4])
+                            solids.add(block.position.offset(0.5,yOffset,0.5)); //.push(block.position.offset(0.5,yOffset,0.5));
+                            foundSolid = true;
+                        }
+                    }
+                }
+            }
+            return solids;
+        }
+*/
+        getSolidBlocks(source) {
+            const badBlocks = new Set();
+            badBlocks.add(this.bot.registry.blocksByName.water.id);
+            badBlocks.add(this.bot.registry.blocksByName.lava.id);
+            badBlocks.add(this.bot.registry.blocksByName.air.id);
+            badBlocks.add(this.bot.registry.blocksByName.web.id);
+        
+            const solids = [];
+            const radius = 2; // [-2, -1, 0, 1, 2]
+        
+            for (let xOffset = -radius; xOffset <= radius; xOffset++) {
+                for (let zOffset = -radius; zOffset <= radius; zOffset++) {
+                    const startY = Math.floor(source.y);
+                    for (let y = startY; y >= startY - 1; y--) {
+                        const block = this.bot.blockAt(new Vec3(source.x + xOffset, y, source.z + zOffset));
+                        const shape = block.shapes[0];
+                    
+                        if (!block || !shape || badBlocks.has(block.name) || block.boundingBox === 'empty') {
+                            continue;
+                        }
+                    
+                        const dx = Math.abs(shape[0] - shape[3]);
+                        const dz = Math.abs(shape[2] - shape[5]);
+                        
+                        if (dx > this.bot.entity.width && dz > this.bot.entity.width) {
+                            const yOffset = Math.abs(shape[1] - shape[4]);
+                            solids.push(block.position.offset(0.5, yOffset, 0.5));
+                            break;
+                        }
+                    }
+                }
+            }
+            return solids;
+        }
+
+
+        getJumpVelocity(source, target, angleDegrees = 0, speed = 0.6548) {
+            const dx = target.x - source.x;
+            const dz = target.z - source.z;
+            const length = Math.hypot(dx, dz);
+        
+            if (length === 0) {
+                return new Vec3(Math.random() * 20 - 10, 0.42, Math.random() * 20 - 10);
+            }
+        
+            const angle = angleDegrees * (Math.PI / 180);
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+        
+            const dirX = dx / length;
+            const dirZ = dz / length;
+        
+            const vx = (dirX * cosA - dirZ * sinA) * speed;
+            const vz = (dirX * sinA + dirZ * cosA) * speed;
+        
+            return new Vec3(vx, 0.42, vz);
+        }
+        getFlatVelocity(source, target, angleDegrees = 0, velocityXZ = 0.05, velocityY = this.bot.entity.velocity.y) {
+            const dx = target.x - source.x;
+            const dz = target.z - source.z;
+            
+            const angleRad = (Math.atan2(dz, dx) + (angleDegrees * Math.PI / 180));
+            const vx = Math.cos(angleRad) * velocityXZ;
+            const vz = Math.sin(angleRad) * velocityXZ;
+
+            return new Vec3(vx,velocityY,vz);
+        }
+        /*  END
+            MOVEMENT
+        */
+        
     }
     bot.pupa_utils = new pupa_utils(bot)
     return bot;
