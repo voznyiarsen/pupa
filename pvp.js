@@ -9,6 +9,9 @@ module.exports = function attach(bot) {
 
         mode = 2;
 
+        strafePoint = null;
+        distanceOld = null;
+
         constructor(bot) {
             this.bot = bot;
         }
@@ -40,11 +43,14 @@ module.exports = function attach(bot) {
         }
 
         doDecide = () => {
-            //this.doUpdate();
-            //if (!this.bot.pvp.target) return;
-            //this.doStrafe();
-            //this.doAvoid();
+            this.updateTarget();
+            if (!this.bot.pvp.target) return;
+            this.doStrafe();
+            this.doAvoid();
             this.doFloat();
+            this.bot.pupa_inventory.equipArmor()
+            if ()
+
         }
 
         doFloat = () => {
@@ -74,40 +80,40 @@ submerged = 1.62 height water
             }
         }
 
-        doUpdate = () => {
+        updateTarget = () => {
             const target = this.bot.nearestEntity(this.getTargetFilter(this.mode));
             if (target) this.bot.pvp.attack(target); else this.bot.pvp.forceStop();
         }
+        
 
-        hasJumped = false;
-        sourceOld = null;
-        strafe = null;
 
         doStrafe = () => {
-            const source = this.bot.entity?.position;
+            const source = this.bot.entity.position;
             const target = this.bot.pvp.target.position;
 
+            function distance2D(a, b) {
+                return Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
+            }
+
+            if (!source || !target) return;
+
             if (this.bot.entity.onGround && source.distanceTo(target) <= 3.5) {
-                this.strafe = this.bot.pupa_utils.getStrafePoint(source, target);
+                this.strafePoint = this.bot.pupa_utils.getStrafePoint(source, target);
                 
-                const velocity = this.bot.pupa_utils.getJumpVelocity(source, this.strafe);
+                const velocity = this.bot.pupa_utils.getJumpVelocity(source, this.strafePoint);
                 if (velocity) {
-                    this.sourceOld = source;
+                    this.bot.entity.velocity.set(0,0,0);
                     this.bot.entity.velocity.set(...Object.values(velocity));
-                    this.hasJumped = true;
                 }
             }
-            if (this.strafe && this.hasJumped) {
-                const getDistance = (a, b) => Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
+
                 
-                const strafeToSource = getDistance(this.strafe, source);
-                const strafeToSourceOld = getDistance(this.strafe, this.sourceOld);
-                const displacement = getDistance(source, this.sourceOld);
-                
-                if (strafeToSource < 0.8 && strafeToSourceOld - displacement < 0) { // dist source -> point - source -> newsource < 0 and dist < 1 
-                    this.hasJumped = false;
-                    this.bot.entity.velocity.set(0,this.bot.entity.velocity.y,0);
+            if (!this.bot.entity.onGround && this.strafePoint && distance2D(source, this.strafePoint) < 0.5) {
+                if (distance2D(source, this.strafePoint) > this.distanceOld) {
+                    const velocity = this.bot.pupa_utils.getFlatVelocity(source, this.strafePoint, 0, 0.05);
+                    this.bot.entity.velocity.set(...Object.values(velocity));
                 }
+                this.lastDist = distance2D(source, this.strafePoint);
             }
         }
     } // add worker threads    

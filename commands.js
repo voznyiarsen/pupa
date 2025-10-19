@@ -276,10 +276,22 @@ module.exports = function attach(bot) {
                         this.bot.on('physicsTick', this.combatMock);
                     } break;
                     case /^t10$/.test(data): {
-                        this.bot.on('physicsTick', this.bot.pupa_pvp.doDecide)
+                        const listener = this.bot.pupa_pvp.doDecide;
+                        if (this.bot.listenerCount('physicsTick', listener) > 0) {
+                            ui.log(`{red-fg}[pupa_pvp]{/} Disabling combat`);
+                            this.bot.off('physicsTick', listener);
+                        } else {
+                            ui.log(`{green-fg}[pupa_pvp]{/} Enabling combat`);
+                            this.bot.on('physicsTick', listener);
+                        }
                     } break;
                     case /^t11$/.test(data): {
-                        ui.log(util.inspect(this.bot.registry.liquids,true,null,true));
+                        ui.log(util.inspect(this.bot.blockAt(this.bot.entity.position),true,null,true));
+                    } break;
+                    case /^t12$/.test(data): {
+                        ui.log(`distance ${this.bot.entity.position.distanceTo(this.bot.players['Patr10t'].entity.position)}`)
+                        ui.log(`pvp pathf? ${this.bot.pathfinder.isMoving()}`)
+
                     } break;
                     /* PATHFIND */
                 /*

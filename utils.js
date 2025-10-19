@@ -168,13 +168,14 @@ module.exports = function attach(bot) {
         /*  START
             MOVEMENT
         */
-        recentPoints = [];
-        recentPointsMax = 1;
 /* 
   Jump when chasing? (A* it?)
   True centre of a block is +0.5 x and z
   if within 0.1 area of point set V to 0
 */
+        recentPoints = [];
+        recentPointsMax = 1;
+
         getStrafePoint(source, target) {
             function distance2D(a, b) {
                 return Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
@@ -184,10 +185,10 @@ module.exports = function attach(bot) {
         
             for (const point of solids) {
                 const distToTarget = distance2D(point, target); // distance to point -> target 
-                if (distToTarget >= 3.5 /*&& distToTarget <= 1*/) continue; 
+                if (distToTarget >= 3.5) continue; 
 
                 const distToSource = distance2D(point, source);
-                if (distToSource >= 3.5 /*&& distToSource <= 1*/) continue;
+                if (distToSource >= 3.5) continue;
 
                 let isValid = true;
                 for (const recentPoint of this.recentPoints) {
@@ -208,61 +209,10 @@ module.exports = function attach(bot) {
             }
             return null;
         }
-/*
+
         getSolidBlocks(source) {
-            const solids = new Set();
-
-            //const solids = [];
-
-            const offsets = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
-
-            const radius = 2;
-
-            const badBlocks = new Set();
-            badBlocks.add(this.bot.registry.blocksByName.water.id);
-            badBlocks.add(this.bot.registry.blocksByName.lava.id);
-            badBlocks.add(this.bot.registry.blocksByName.air.id);
-            badBlocks.add(this.bot.registry.blocksByName.web.id);
-
-            for (let xOffset = -radius; xOffset <= radius; xOffset++) {
-                for (let zOffset = -radius; zOffset <= radius; zOffset++) {
-//            for (const xOffset of offsets) {
-//                for (const zOffset of offsets) {
-                    // Start from the source Y position and search downward
-                    let foundSolid = false;
-                    for (let y = Math.floor(source.y); y >= source.y - 2 && !foundSolid; y--) {
-                        const point = new Vec3(source.x + xOffset, y, source.z + zOffset);
-                        const block = this.bot.blockAt(point);
-
-                        if (!block) continue;
-
-                        const [dx, dz] = block.shapes[0] 
-                            ? [Math.abs(block.shapes[0][0] - block.shapes[0][3]), Math.abs(block.shapes[0][2] - block.shapes[0][5])] 
-                            : [0, 0];
-
-                        if (!badBlocks.has(block.id) && 
-                            block.boundingBox != 'empty' && 
-                            dx > this.bot.entity.width && 
-                            dz > this.bot.entity.width) {
-                            const yOffset = Math.abs(block.shapes[0][1] - block.shapes[0][4])
-                            solids.add(block.position.offset(0.5,yOffset,0.5)); //.push(block.position.offset(0.5,yOffset,0.5));
-                            foundSolid = true;
-                        }
-                    }
-                }
-            }
-            return solids;
-        }
-*/
-        getSolidBlocks(source) {
-            const badBlocks = new Set();
-            badBlocks.add(this.bot.registry.blocksByName.water.id);
-            badBlocks.add(this.bot.registry.blocksByName.lava.id);
-            badBlocks.add(this.bot.registry.blocksByName.air.id);
-            badBlocks.add(this.bot.registry.blocksByName.web.id);
-        
             const solids = [];
-            const radius = 2; // [-2, -1, 0, 1, 2]
+            const radius = 3; // [-3, -2, -1, 0, 1, 2, 3]
         
             for (let xOffset = -radius; xOffset <= radius; xOffset++) {
                 for (let zOffset = -radius; zOffset <= radius; zOffset++) {
@@ -271,7 +221,7 @@ module.exports = function attach(bot) {
                         const block = this.bot.blockAt(new Vec3(source.x + xOffset, y, source.z + zOffset));
                         const shape = block.shapes[0];
                     
-                        if (!block || !shape || badBlocks.has(block.name) || block.boundingBox === 'empty') {
+                        if (!block || !shape || block.boundingBox === 'empty') {
                             continue;
                         }
                     
@@ -288,7 +238,6 @@ module.exports = function attach(bot) {
             }
             return solids;
         }
-
 
         getJumpVelocity(source, target, angleDegrees = 0, speed = 0.6548) {
             const dx = target.x - source.x;
