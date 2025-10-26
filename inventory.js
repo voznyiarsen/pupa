@@ -47,7 +47,7 @@ module.exports = function attach(bot) {
 
         async equipGapple() {
             const gapple = this.bot.inventory.findInventoryItem(this.bot.registry.itemsByName.golden_apple.id) || this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')];
-            while (this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== gapple.type) {
+            while (gapple && this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== gapple.type) {
                 await this.bot.equip(gapple.type, 'off-hand');
                 await this.bot.waitForTicks(2);
             }
@@ -65,14 +65,15 @@ module.exports = function attach(bot) {
             const buff = this.bot.inventory.findInventoryItem(this.bot.registry.itemsByName.potion.id, null);
             if (nbt.simplify(buff.nbt).Potion != 'minecraft:strong_strength') return;
 
-            if (this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== buff.type) {
-              await this.bot.equip(buff.type, 'off-hand');
+            while (buff && this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== buff.type) {
+                await this.bot.equip(buff.type, 'off-hand');
+                await this.bot.waitForTicks(2);
             }
 
             this.bot.activateItem(true);
 
             while (!this.bot.entity.effects['5']) {
-              await this.bot.waitForTicks(2); 
+                await this.bot.waitForTicks(2); 
             }
 
             this.bot.deactivateItem();
@@ -82,14 +83,16 @@ module.exports = function attach(bot) {
             const totem = this.bot.inventory.findInventoryItem(this.bot.registry.itemsByName.totem_of_undying.id, null);
             if (totem && this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== totem.type) {
                 await this.bot.equip(totem.type, 'off-hand');
+                await this.bot.waitForTicks(2);
             }
         }
 
         async equipPearl() {
             const pearl = bot.inventory.findInventoryItem(bot.registry.itemsByName.ender_pearl.id, null);
             if (!pearl) return;
-            if (bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')]?.type !== pearl.type) {
+            while (bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')]?.type !== pearl.type) {
                 await bot.equip(pearl.type, 'off-hand');
+                await this.bot.waitForTicks(2);
             }
         
             await bot.waitForTicks(1);
@@ -107,6 +110,7 @@ module.exports = function attach(bot) {
             for (const piece of itemPieces) {
                 if (piece.item && piece.slotCheck?.type !== piece.item.type && (piece.slot === 'off-hand' || piece.item.enchants.length >= 8)) {
                     await this.bot.equip(piece.item.type, piece.slot);
+                    await this.waitForTicks(2);
                 }
             }
         }

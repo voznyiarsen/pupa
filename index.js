@@ -91,6 +91,14 @@ function start_client() {
         }
     });
 
+    bot.on('entityHurt', async (entity, source) => {
+        if (entity.type === 'player' && entity.username === bot.username) {
+            await bot.waitForTicks(1);
+            bot.pupa_pvp.getLastDamage();
+        }
+        ui.log(`${entity?.username} ${source?.username}`)
+    });
+
     bot.on('playerCollect', async (collector, collected) => {
         const junk = new Set();
         junk.add(bot.registry.itemsByName.compass.id);
