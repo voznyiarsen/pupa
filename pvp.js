@@ -41,15 +41,82 @@ module.exports = function attach(bot) {
                     return null;
             }
         }
+        averageDPS = 0;
 
-        doDecide = () => {
+        decideIfTotem = () => {
+            const healthPoints = this.bot.health;
+            const absorbPoints = this.bot.entity.metadata[11] || 0;
+
+            const hasTotems = this.bot.pupa_utils.getItemCount('totem_of_undying') > 0;
+            const hasGapple = this.bot.pupa_utils.getItemCount('golden_apple') > 0;
+
+            const shouldTotem = hasTotems && 
+                                healthPoints + absorbPoints <= (this.averageDPS || 1)*1.6 || !hasGapple;
+            if (shouldTotem) {
+                ui.log('TOTEM');
+                this.bot.pupa_inventory.equipTotem();
+            }
+        }
+        decideIfHeal = async () => {
+            const healthPoints = this.bot.health;
+            const absorbPoints = this.bot.entity.metadata[11] || 0;
+
+            const regeneration = this.bot.entity.effects['10'];
+            const resistance = this.bot.entity.effects['11'];
+            const resistanceFire = this.bot.entity.effects['12'];
+            
+            const hasTotems = this.bot.pupa_utils.getItemCount('totem_of_undying') > 0;
+            const hasGapple = this.bot.pupa_utils.getItemCount('golden_apple') > 0;
+        
+            const shouldHeal = hasGapple && healthPoints + absorbPoints > (this.averageDPS || 0)*1.6 && 
+                               ((!resistance || !resistanceFire)     ||
+                               (healthPoints < 19 && !regeneration)  || 
+                               ((absorbPoints < 16 && absorbPoints > 0) && !regeneration)) || !hasTotems;
+            if (shouldHeal) {
+                ui.log(` ${healthPoints} ${absorbPoints}`);
+                this.bot.pupa_inventory.equipGapple();
+            }
+        }
+
+        doDecide = async () => {
             this.updateTarget();
             if (!this.bot.pvp.target) return;
+            
             this.doStrafe();
             this.doAvoid();
             this.doFloat();
-            this.bot.pupa_inventory.equipArmor()
-            if ()
+        
+            await this.bot.pupa_inventory.equipArmor();
+
+            await this.decideIfHeal(); // ok
+            await this.decideIfTotem();
+            //this.bot.pupa_inventory.equipBuff();
+            //this.bot.pupa_inventory.equipPearl();
+            //this.bot.pupa_inventory.equipPassive();
+         // + 16 absorb + 30 seconds of 0.4 per second + 20% resist
+            
+            // average damage recieved + 
+            
+            /*                 but not < average dps                                                                                                                  ++                                                                                           
+            do dynamic calc based on DPS
+
+            Fire Aspect adds 80 fire-ticks (4 seconds of burning) per level to the target, formula: (level × 4) – 1 #### FIRE RESIST nullifies, no need
+
+            Sweep form  1 + Attack_Damage × (Sweeping_Edge_Level / (Sweeping_Edge_Level + 1)), rounded to the nearest integer
+            assume max ench   sharp formula 0.5 * level + 0.5
+            5 sharp sword
+            nether  	11 (15) 
+            diamond     10 (13.5) 
+            iron        9 (12) 
+            stone       8 (10.5) 
+            wood/gold   7 (9) 
+            */
+            /*    
+
+      if (canHeal && (isAboveMinHealth && hasTotem || !hasTotem) && (gapple && gapple.type === bot.registry.itemsByName.golden_apple.id)) 
+            */
+
+            //if ()
 
         }
 

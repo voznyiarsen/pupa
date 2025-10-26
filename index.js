@@ -91,10 +91,17 @@ function start_client() {
         }
     });
 
-    bot.on('physicTick', () => {
-        // 
+    bot.on('playerCollect', async (collector, collected) => {
+        const junk = new Set();
+        junk.add(bot.registry.itemsByName.compass.id);
+        junk.add(bot.registry.itemsByName.knowledge_book.id);
+        junk.add(bot.registry.itemsByName.glass_bottle.id);
 
-    });
+        if (collector.username === bot.username) {
+            await bot.waitForTicks(1);
+            bot.pupa_inventory.tossJunk(junk);
+        }
+    })
 }
 
 ui.onInput(text => {

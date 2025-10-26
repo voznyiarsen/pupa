@@ -1,3 +1,5 @@
+const ui = require('./tui')();
+
 const nbt = require('prismarine-nbt');
 
 module.exports = function attach(bot) {
@@ -45,8 +47,9 @@ module.exports = function attach(bot) {
 
         async equipGapple() {
             const gapple = this.bot.inventory.findInventoryItem(this.bot.registry.itemsByName.golden_apple.id) || this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')];
-            if (this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== gapple.type) {
+            while (this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== gapple.type) {
                 await this.bot.equip(gapple.type, 'off-hand');
+                await this.bot.waitForTicks(2);
             }
         
             this.bot.activateItem(true);
@@ -108,15 +111,14 @@ module.exports = function attach(bot) {
             }
         }
 
-        async tossJunk() {
-            const items = [
-                this.bot.inventory.findInventoryItem(this.bot.registry.itemsByName.compass.id, null),
-                this.bot.inventory.findInventoryItem(this.bot.registry.itemsByName.knowledge_book.id, null),
-                this.bot.inventory.findInventoryItem(this.bot.registry.itemsByName.glass_bottle.id, null)
-            ];
-
-            for (const item of items) {
-                if (item) await this.bot.toss(item.type, null, item.count);
+        async tossJunk(junk) {
+            for (const id of junk) {
+                let item;
+                while ((item = this.bot.inventory.findInventoryItem(id, null)) !== null) {
+                    ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${item.name} x${item.count}`);
+                    await this.bot.toss(item.type, null, item.count);
+                    await this.bot.waitForTicks(1);
+                }
             }
         }
     }

@@ -1,5 +1,7 @@
 const { Vec3 } = require('vec3');
 
+const nbt = require('prismarine-nbt');
+
 module.exports = function attach(bot) {
     class pupa_utils {
         constructor(bot) {
@@ -7,6 +9,16 @@ module.exports = function attach(bot) {
         }
         /*        
         1.62 block height to head base for target entity.eyeHeight
+        */
+        getItemCount(itemId) {
+          const itemType = bot.registry.itemsByName[itemId].id;
+          const allItems = [...bot.inventory.items(), ...Object.values(bot.entity.equipment)];
+          return allItems
+            .filter(item => item?.type === itemType)
+            .reduce((acc, item) => acc + item.count, 0);
+        }
+        /*
+
         */
         /*  START 
             PROJECTILE MOTION         
@@ -132,6 +144,7 @@ module.exports = function attach(bot) {
         /*  END
             POINT IN POLYGON
         */
+        /*
         async isNearPassable(point) { //boundingBox: empty
             const yTop = point.y - 0.5;
             const yBottom = yTop - 1;
@@ -162,8 +175,6 @@ module.exports = function attach(bot) {
             }
             return false;
         }
-        /*  END 
-            AREA CALCULATION
         */
         /*  START
             MOVEMENT
