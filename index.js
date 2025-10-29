@@ -1,6 +1,5 @@
 require('dotenv').config();
 
-const { Vec3 } = require('vec3');
 const util = require('node:util');
 
 const mineflayer = require('mineflayer');
@@ -74,29 +73,19 @@ function start_client() {
 
     bot.on('chat', async (username, message) => {
         ui.log(`<${username}> ${message}`); /// [ 0, 0, 0, 1, 1, 1 ]
-
-        ui.log(`${util.inspect(bot.players['Patr10t'].entity)}`)
-        //ui.log(util.inspect(bot.blockAt(bot.entity.position.offset(0, -1.5, 0)),true,null,true)); // if length [x1, y1, z1, x2, y2, z2] if delta x and z is less than 0.5
-
-        //ui.log(util.inspect(bot.pathfinder.movements.interactableBlocks,false,null,false))
-        //ui.log(util.inspect(bot.pathfinder.movements.replaceables,false,null,false))
-
-        ui.log(await bot.pupa_utils.isNearPassable(bot.entity.position));
         switch (true) {
             case message == 'gg':
                 break;
-        
             default:
                 break;
         }
     });
-
+    
     bot.on('entityHurt', async (entity, source) => {
         if (entity.type === 'player' && entity.username === bot.username) {
             await bot.waitForTicks(1);
             bot.pupa_pvp.getLastDamage();
         }
-        ui.log(`${entity?.username} ${source?.username}`)
     });
 
     bot.on('playerCollect', async (collector, collected) => {
@@ -106,8 +95,8 @@ function start_client() {
         junk.add(bot.registry.itemsByName.glass_bottle.id);
 
         if (collector.username === bot.username) {
-            await bot.waitForTicks(1);
-            bot.pupa_inventory.tossJunk(junk);
+            await bot.waitForTicks(2);
+            return bot.pupa_inventory.tossJunk(junk);
         }
     })
 }

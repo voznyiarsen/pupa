@@ -79,22 +79,79 @@ module.exports = function attach(bot) {
                     this.bot.pupa_inventory.tossAllItems();
                     break;
                 /* EQUIP ITEMS */
-                case /^eq \d+ [\w-]+$/.test(data): // ITEM | DESTINATION
-                    ui.log(`{green-fg}[pupa_inventory]{/} Equipping ${this.bot.registry.items[parseInt(command[1])].displayName} to ${command[2]}`);
-                    this.bot.equip(parseInt(command[1]), command[2]); // improve ts to take word input
-                    break;
-                /* UNEQIUP ITEMS */
-                case /^uneq [\w-]+$/.test(data): // DESTINATION
-                    ui.log(`{green-fg}[pupa_inventory]{/} Unequipping ${this.bot.inventory.slots[this.bot.getEquipmentDestSlot(command[1])].displayName} from ${command[1]}`);
-                    this.bot.unequip(command[1]);
-                    break;
-                case /^uneqall$/.test(data): 
-                    ui.log(`{green-fg}[pupa_inventory]{/} Unequipping all equipped items...`);
-                    this.bot.pupa_inventory.unequipAllItems();
-                    break;
-                    /* TESTS
+                case /^eq [\d\w_]+ [\w-]+$/.test(data): { // ITEM | DESTINATION
+                    const destination = command[2];
+                    const slot = this.bot.getEquipmentDestSlot(destination);
+                    const item = this.bot.registry.items[parseInt(command[1])] || this.bot.registry.itemsByName[command[1]];
 
-                    */
+                    ui.log(`{blue-fg}[pupa_inventory]{/} Equipping ${item.displayName} to ${destination} (${slot})`);      
+                    await this.bot.equip(parseInt(item.id), destination); 
+                    } break;
+                /* UNEQIUP ITEMS */
+                case /^uneq [\w-]+$/.test(data): { // DESTINATION
+                    const destination = command[1];
+                    const slot = this.bot.getEquipmentDestSlot(destination);
+                    const item = this.bot.inventory.slots[slot];
+
+                    ui.log(`{blue-fg}[pupa_inventory]{/} Unequipping ${item.displayName} from ${destination} (${slot})`);
+                    await this.bot.unequip(destination);
+                } break;
+                case /^uneqall$/.test(data): {
+                    ui.log(`{blue-fg}[pupa_inventory]{/} Unequipping all equipped items...`);
+                    await this.bot.pupa_inventory.unequipAllItems();
+                } break;
+                case /^ver$/.test(data):
+                    ui.log(this.bot.version);
+                break
+                case /^res\s?[\d\w]*$/.test(data):
+                    ui.log(`{blue-fg}[pupa_inventory]{/} Restoring inventory...`);
+                    this.bot.pupa_inventory.restoreInventory(command[1]);
+                break
+                case /^rec\s?[\d\w]*$/.test(data): {
+                        const fs = require('node:fs');
+                        const slot = command[1] ? command[1] : 0 
+
+                        const array = this.bot.inventory.slots.filter((item) => item !== null && item.type !== null);
+                        const filename = `./recording-${slot}.json`
+
+                        const data = array.map(element => ({
+                            type: element.type, 
+                            count: element.count, 
+                            metadata: element.metadata, 
+                            nbt: element.nbt, 
+                            slot: element.slot 
+                        }));
+
+                        const json = JSON.stringify(data, null, 2);
+
+                        fs.writeFile(filename, json, (error) => {
+                            if (error) {
+                                ui.log(`{red-fg}[pupa_utils]{/} Recording failed: ${error}`);
+                            } else {
+                                ui.log(`{green-fg}[pupa_utils]{/} ${data.length} items recorded into slot ${slot}`);
+                            }
+                        });
+                } break;
+                case /^clear$/.test(data):
+                        while (this.bot.player.gamemode != 1) {
+                            ui.log(`{blue-fg}[pupa_inventory]{/} Current gamemode: ${this.bot.player.gamemode}, setting to 1`);
+                            await this.bot.chat('/gamemode 1');
+                            await this.bot.waitForTicks(5);
+                        }
+                        if (this.bot.player.gamemode === 1) {
+                            try {
+                                await this.bot.creative.clearInventory();
+                                ui.log(`{green-fg}[pupa_inventory]{/} Inventory cleared`);
+                            } catch (error) {
+                                ui.log(`{red-fg}[pupa_inventory]{/} Inventory clear failed: ${error}`);
+                            }
+                        }
+                        while (this.bot.player.gamemode != 0) {
+                            ui.log(`{blue-fg}[pupa_inventory]{/} Current gamemode: ${this.bot.player.gamemode}, setting to 0`);
+                            await this.bot.chat('/gamemode 0');
+                            await this.bot.waitForTicks(5);
+                        }
+                break;                
                 case /^t1$/.test(data): {
                     const source = this.bot.entity.position;
                     const target = this.bot.players['Patr10t'].entity.position;
@@ -104,8 +161,7 @@ module.exports = function attach(bot) {
                     ui.log(`[test] Sending pearl from ${source} to ${target} Offset: ${offset}b`);
                     this.bot.lookAt(target.offset(0, offset, 0), true);
                     this.bot.pupa_inventory.equipPearl();
-                    }
-                    break;
+                } break;
                 case /^t2$/.test(data): {
                     const source = this.bot.entity.position;
                     const target = this.bot.players['Patr10t'].entity.position;
@@ -117,15 +173,14 @@ module.exports = function attach(bot) {
 {green-fg}[pupa_utils]{/} Source: ${source}
 {green-fg}[pupa_utils]{/} Target: ${target}`);
 
-                          this.bot.entity.velocity.set(...Object.values(velocity));
+                        this.bot.entity.velocity.set(...Object.values(velocity));
                     } catch (error) {
                         ui.log(`
 {red-fg}[pupa_utils]{/} getJumpVelocity failed!
 {red-fg}[pupa_utils]{/} Source: ${source}
 {red-fg}[pupa_utils]{/} Target: ${target}`);
                     }
-                    }
-                    break;
+                } break;
                 case /^t3$/.test(data): {
                     const source = this.bot.entity.position;
                     const target = this.bot.players['Patr10t'].entity.position;
@@ -144,8 +199,7 @@ module.exports = function attach(bot) {
 {red-fg}[pupa_utils]{/} Source: ${source}
 {blue-fg}[pupa_utils]{/} Target: ${target}`);
                     }
-                    }
-                    break;
+                } break;
                 case /^t4$/.test(data): {
                     const source = this.bot.entity.position;
                     const target = this.bot.players['Patr10t'].entity.position;
@@ -182,8 +236,8 @@ module.exports = function attach(bot) {
 {red-fg}[pupa_utils]{/} Source: ${source}
 {red-fg}[pupa_utils]{/} Target: ${target}`);
                     }
-                    } break;
-                    case /^t5$/.test(data): {
+                } break;
+                case /^t5$/.test(data): {
                         // round up this.bot.entity.position and vel to it
                         const source = this.bot.entity.position;
                         const target = this.bot.entity.position.offset(3, 0, 0);
@@ -195,13 +249,31 @@ module.exports = function attach(bot) {
 {green-fg}[pupa_utils]{/} Target: ${target}
 {green-fg}[pupa_utils]{/} Velocity: ${velocity}
 {green-fg}[pupa_utils]{/} Jump displacement: ${source.distanceTo(this.bot.entity.position)}`);
-                    } break;
-                    case /^t6$/.test(data): {
-                        const source = this.bot.entity.position;
-                        const liquid = this.bot.pupa_utils.isInLiquid(source);
-                        ui.log(`{green-fg}[pupa_utils]{/} isInLiquid: ${liquid}`);
-                    } break;
-                    case /^t7$/.test(data): {
+                } break;
+                case /^t6$/.test(data): {
+                        const fs = require('fs');
+
+                        const items = [
+                            this.bot.registry.itemsByName.diamond_helmet.id,
+                            this.bot.registry.itemsByName.diamond_chestplate.id,
+                            this.bot.registry.itemsByName.diamond_leggings.id,
+                            this.bot.registry.itemsByName.diamond_boots.id
+                        ];
+
+                        const itemData = items.map(id => this.bot.inventory.findInventoryItem(id, null));
+
+
+                        // Single console output
+                        itemData.forEach((item, index) => {
+                            ui.log(util.inspect(item.enchants, true, null, true));
+                            fs.appendFile('example.txt', util.inspect(item.enchants, true, null, false) + '\n', (err) => {
+                                if (err) ui.log('Error writing to file:', err);
+                                else ui.log('All enchants written successfully!');
+                            });
+                        });
+
+                } break;
+                case /^t7$/.test(data): {
                         const source = this.bot.entity.position;
                         const unwanted = this.bot.pupa_utils.isInUnwanted(source);
                         ui.log(`{blue-fg}[pupa_utils]{/} isInUnwanted: ${unwanted}`);
@@ -210,89 +282,36 @@ module.exports = function attach(bot) {
                             ui.log(`{green-fg}[pupa_utils]{/} Applying vel: ${flat}`);
                             this.bot.entity.velocity.set(...Object.values(flat));
                         }
-                    } break;
-                    case /^t8$/.test(data): {
-                        const source = this.bot.entity.position;
-                        const target = this.bot.players['Patr10t'].entity.position;
+                } break;
+                case /^t8$/.test(data): {
+                    const source = this.bot.entity.position;
+                    const target = this.bot.players['Patr10t'].entity.position;
 
-                        const velocity = this.bot.pupa_utils.getFlatVelocity(source, target, 180, 0.6);
-                        ui.log(`{green-fg}[pupa_utils]{/} getFlatVelocity: ${velocity}`);
-                        if (velocity) this.bot.entity.velocity.set(...Object.values(velocity));
-                    } break;
-                    case /^t9$/.test(data): {
-                        if (this.combatMock) {
-                            this.bot.removeListener('physicsTick', this.combatMock);
-                            this.combatMock = null;
-                            this.bot.pvp.forceStop();
-                            ui.log(`{red-fg}[pupa_pvp]{/} Mock combat stopped`);
-                            break;
-                        }
-                        ui.log(`{green-fg}[pupa_pvp]{/} Mock combat started`);
-
-                        let oldSource = null;
-                        let strafe = null;
-                        let reset = false;
-                        this.combatMock = async () => {
-                            const newSource = this.bot.entity.position;
-                            const entity = this.bot.players['Patr10t'].entity;
-                            const target = entity.position;
-
-                            this.bot.pvp.attack(entity);
-
-                            if (this.bot.entity.onGround && newSource.distanceTo(target) <= 3.5) {
-                                if (oldSource) ui.log(`{green-fg}[pupa_utils]{/} distance < 1?: ${newSource.distanceTo(strafe) < 1} (${newSource.distanceTo(strafe)})
-{green-fg}[pupa_utils]{/} ${oldSource.distanceTo(strafe) + 0.5 < oldSource.distanceTo(newSource) ? "Overshooting" : "Undershooting"}`);
-
-                                oldSource = newSource;
-                                strafe = this.bot.pupa_utils.getStrafePoint(newSource, target);
-
-                                const velocity = this.bot.pupa_utils.getJumpVelocity(newSource, strafe);
-                                ui.log(`
-{yellow-fg}[pupa_pvp]{/} Source  : ${newSource}
-{yellow-fg}[pupa_pvp]{/} Strafe  : ${strafe}
-{yellow-fg}[pupa_pvp]{/} Displace: ${newSource.distanceTo(strafe)}
-{yellow-fg}[pupa_pvp]{/} Velocity: ${velocity}`);
-
-                                this.bot.entity.velocity.set(...Object.values(velocity));
-                                reset = false;
-                            }
-                            if (strafe && !reset) {
-                                const pointDistance = Math.sqrt((strafe.x - newSource.x) ** 2 + (strafe.z - newSource.z) ** 2);
-
-                                const strOldDist = Math.sqrt((strafe.x - oldSource.x) ** 2 + (strafe.z - oldSource.z) ** 2);
-                                const newOldDist = Math.sqrt((newSource.x - oldSource.x) ** 2 + (newSource.z - oldSource.z) ** 2);
-
-                                if (pointDistance < 0.8 && strOldDist - newOldDist < 0) { // dist source -> point - source -> newsource < 0 and dist < 1 
-                                    ui.log(`{blue-fg}[pupa_pvp]{/} Distance to point     : ${pointDistance}
-{blue-fg}[pupa_pvp]{/} Strafe to Old distance: ${strOldDist}
-{blue-fg}[pupa_pvp]{/} New to Old distance   : ${newOldDist}
-{blue-fg}[pupa_pvp]{/} Distance difference   : ${strOldDist - newOldDist < 0} (${strOldDist - newOldDist})`);
-                                    this.bot.entity.velocity.set(0,this.bot.entity.velocity.y,0);
-                                    reset = true;
-                                }
-                            }
-                        };
-                    
-                        this.bot.on('physicsTick', this.combatMock);
-                    } break;
-                    case /^t10$/.test(data): {
-                        const listener = this.bot.pupa_pvp.doDecide;
-                        if (this.bot.listenerCount('physicsTick', listener) > 0) {
-                            ui.log(`{red-fg}[pupa_pvp]{/} Disabling combat`);
-                            this.bot.off('physicsTick', listener);
-                        } else {
-                            ui.log(`{green-fg}[pupa_pvp]{/} Enabling combat`);
-                            this.bot.on('physicsTick', listener);
-                        }
-                    } break;
-                    case /^t11$/.test(data): {
-                        ui.log(util.inspect(this.bot.blockAt(this.bot.entity.position),true,null,true));
-                    } break;
-                    case /^t12$/.test(data): {
-                        ui.log(`distance ${this.bot.entity.position.distanceTo(this.bot.players['Patr10t'].entity.position)}`)
-                        ui.log(`pvp pathf? ${this.bot.pathfinder.isMoving()}`)
-
-                    } break;
+                    const velocity = this.bot.pupa_utils.getFlatVelocity(source, target, 180, 0.6);
+                    ui.log(`{green-fg}[pupa_utils]{/} getFlatVelocity: ${velocity}`);
+                    if (velocity) this.bot.entity.velocity.set(...Object.values(velocity));
+                } break;
+                case /^t9$/.test(data): {
+                    ui.log(util.inspect(this.bot.inventory.slots,true,null,true));
+                } break;
+                case /^t10$/.test(data): {
+                    const listener = this.bot.pupa_pvp.doDecide;
+                    if (this.bot.listenerCount('physicsTick', listener) > 0) {
+                        ui.log(`{red-fg}[pupa_pvp]{/} Disabling combat`);
+                        this.bot.pvp.forceStop();
+                        this.bot.off('physicsTick', listener);
+                    } else {
+                        ui.log(`{green-fg}[pupa_pvp]{/} Enabling combat`);
+                        this.bot.on('physicsTick', listener);
+                    }
+                } break;
+                case /^t11$/.test(data): {
+                    ui.log(util.inspect(this.bot.blockAt(this.bot.entity.position),true,null,true));
+                } break;
+                case /^t12$/.test(data): {
+                    ui.log(`distance ${this.bot.entity.position.distanceTo(this.bot.players['Patr10t'].entity.position)}`)
+                    ui.log(`pvp pathf? ${this.bot.pathfinder.isMoving()}`)
+                } break;
                     /* PATHFIND */
                 /*
                 case /^goto -?\d*\s?-?\d*\s?-?\d*$/.test(data): 
@@ -367,20 +386,18 @@ module.exports = function attach(bot) {
                     } else {
                         ui.log(`{red-fg}[pupa_commands]{/} NBT Data of item ${command[1]} not found`);
                     }
-                }
-                    break;
+                } break;
                 /* LIST ELEMENTS */
                 case /^i$/.test(data):
 
 
                     getItems();
-                    break;
+                break;
                 case /^p$/.test(data): {
                     const players = this.bot.players 
 
                     
-                    }
-                    break;
+                } break;    
                 /* QUIT */
                 case /^q$/.test(data):
                     this.bot.end();

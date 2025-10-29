@@ -14,8 +14,40 @@ module.exports = function attach(bot) {
 
         constructor(bot) {
             this.bot = bot;
+            this.debounce = false;
         }
         
+        doDecide = async () => {
+            this.updateTarget();
+            if (!this.bot.pvp.target) return;
+            
+            try {
+                this.doStrafe();
+                this.doAvoid();
+                this.doFloat();
+            } catch (error) {
+                ui.log(`{red-fg}[pupa_pvp]{/} Non-blocking chain failed: ${error}`);
+            }
+             
+            if (this.debounce) return;
+            this.debounce = true;
+
+            try {
+                await this.decideIfArmor();
+                await this.decideIfTotem();
+                await this.decideIfHeal();
+                await this.decideIfBuff();
+
+                await this.bot.pupa_inventory.equipHand();
+                await this.bot.pupa_inventory.equipOffHand();
+
+                await this.decideIfToss();
+            } catch (error) {
+                ui.log(`{red-fg}[pupa_pvp]{/} Chain failed: ${error}`);
+            }
+            this.debounce = false;
+        }
+
         setMode(mode) {
             this.mode++;
             if (this.mode > 2) this.mode = 0;
@@ -52,6 +84,15 @@ module.exports = function attach(bot) {
             this.lastHealth = health;
         }
 
+        decideIfToss = async () => {
+            const junk = new Set();
+            junk.add(bot.registry.itemsByName.compass.id);
+            junk.add(bot.registry.itemsByName.knowledge_book.id);
+            junk.add(bot.registry.itemsByName.glass_bottle.id);
+
+            return bot.pupa_inventory.tossJunk(junk);
+        }
+
         decideIfTotem = async () => {
             const healthPoints = this.bot.health;
             const absorbPoints = this.bot.entity.metadata[11] || 0;
@@ -59,14 +100,17 @@ module.exports = function attach(bot) {
             const hasTotems = this.bot.pupa_utils.getItemCount('totem_of_undying') > 0;
             const hasGapple = this.bot.pupa_utils.getItemCount('golden_apple') > 0;
 
-            const shouldTotem = hasTotems && healthPoints + absorbPoints <= (this.lastDamage || 1)*1.6 || 
-                                !hasGapple;
+            if (!hasTotems) return;
+
+            const shouldTotem = (healthPoints + absorbPoints <= (this.lastDamage || 1)*1.6 || !hasGapple);
             if (shouldTotem) {
-                ui.log(`{green-fg}[pupa_pvp]{/} Conditions for decideIfTotem met, ${healthPoints} + ${absorbPoints}`);
-                await this.bot.pupa_inventory.equipTotem();
+                ui.log(`
+{green-fg}[pupa_pvp]{/} Conditions for decideIfTotem met @ ${healthPoints} + ${absorbPoints}
+{green-fg}[pupa_pvp]{/} Regeneration effect?: ${this.bot.entity.effects['10'] ? 'applied' : 'not applied'}`);
+                return this.bot.pupa_inventory.equipTotem();
             }
         }
-
+        
         decideIfHeal = async () => {
             const healthPoints = this.bot.health;
             const absorbPoints = this.bot.entity.metadata[11] || 0;
@@ -78,13 +122,15 @@ module.exports = function attach(bot) {
             const hasTotems = this.bot.pupa_utils.getItemCount('totem_of_undying') > 0;
             const hasGapple = this.bot.pupa_utils.getItemCount('golden_apple') > 0;
         
-            const shouldHeal = hasGapple && healthPoints + absorbPoints > (this.lastDamage || 1)*1.6 && 
-                               ((!resistance || !resistanceFire)     ||
-                               (healthPoints < 20 && !regeneration)) || 
-                               !hasTotems;
+            if (!hasGapple) return;
+
+            const shouldHeal = (healthPoints + absorbPoints > (this.lastDamage || 1)*1.6 || !hasTotems) && 
+                               ((!resistance || !resistanceFire) || (healthPoints < 20 && !regeneration));
             if (shouldHeal) {
-                ui.log(`{green-fg}[pupa_pvp]{/} Conditions for decideIfHeal met, ${healthPoints} + ${absorbPoints}`);
-                await this.bot.pupa_inventory.equipGapple();
+                ui.log(`
+{green-fg}[pupa_pvp]{/} Conditions for decideIfHeal met @ ${healthPoints} + ${absorbPoints}
+{green-fg}[pupa_pvp]{/} Regeneration effect?: ${regeneration ? 'applied' : 'not applied'}`);
+                return this.bot.pupa_inventory.equipGapple();
             }
         }
         // not hit for n time? 3s // 
@@ -92,31 +138,40 @@ module.exports = function attach(bot) {
             const healthPoints = this.bot.health;
             const absorbPoints = this.bot.entity.metadata[11] || 0;
 
+            const strength = this.bot.entity.effects['5'];
+
             const hasTotems = this.bot.pupa_utils.getItemCount('totem_of_undying') > 0;
             const hasGapple = this.bot.pupa_utils.getItemCount('golden_apple') > 0;
             const hasPotion = this.bot.pupa_utils.getItemCount('potion') > 0;
 
-            const shouldBuff = hasPotion && healthPoints + absorbPoints > 10 ||
-                               (!hasTotems && !hasGapple);
+            if (!hasPotion) return;
+
+            const shouldBuff = (healthPoints + absorbPoints > 10 || (!hasTotems && !hasGapple)) && !strength;
             if (shouldBuff) {
-                ui.log(`{green-fg}[pupa_pvp]{/} Conditions for decideIfBuff met, ${healthPoints} + ${absorbPoints}`);
-                await this.bot.pupa_inventory.equipPassive();
+                return this.bot.pupa_inventory.equipBuff();
             }
         }
 
-        doDecide = async () => {
-            this.updateTarget();
-            if (!this.bot.pvp.target) return;
-            
-            this.doStrafe();
-            this.doAvoid();
-            //this.doFloat();
-        
-            await this.bot.pupa_inventory.equipArmor();
+        decideIfArmor = async () => {
+            const healthPoints = this.bot.health;
+            const absorbPoints = this.bot.entity.metadata[11] || 0;
 
-            await this.decideIfHeal(); // promise
-            await this.decideIfTotem();
+            const hasArmor = this.bot.pupa_utils.getItemCount('diamond_helmet') + this.bot.pupa_utils.getItemCount('diamond_chestplate') + 
+                             this.bot.pupa_utils.getItemCount('diamond_leggings') + this.bot.pupa_utils.getItemCount('diamond_boots') > 0
+
+            if (!hasArmor) return;
+
+            const shouldArmor = healthPoints + absorbPoints > (this.lastDamage || 1)*1.6;
+
+            if (shouldArmor) {
+                return this.bot.pupa_inventory.equipArmor();
+            }
         }
+
+        decideIfPearl = async () => {
+            
+        }
+
             //this.bot.pupa_inventory.equipBuff();
             //this.bot.pupa_inventory.equipPearl();
             // + 16 absorb + 30 seconds of 0.4 per second + 20% resist
@@ -137,12 +192,6 @@ module.exports = function attach(bot) {
             stone       8 (10.5) 
             wood/gold   7 (9) 
             */
-            /*    
-
-      if (canHeal && (isAboveMinHealth && hasTotem || !hasTotem) && (gapple && gapple.type === bot.registry.itemsByName.golden_apple.id)) 
-            */
-
-            //if ()
 
 
         doFloat = () => {
@@ -212,32 +261,3 @@ submerged = 1.62 height water
     bot.pupa_pvp = new pupa_pvp(bot)
     return bot;
 }
-/*
-function combatMovement() {
-    if (!this.entity) return;
-
-    if (this.isOverLiquid && !this.bot.pathfinder?.isMoving()) {
-      this.bot.setControlState('forward', true);
-    }
-
-    if (this.bot.entity.isInWeb) {
-      this.bot.setControlState('jump', false);
-    }
-
-    this.strafeMovement(this.entity);
-  }
-
-function combatTargeting() {
-    if (!this.entity) return;
-
-    if (this.entity.position.distanceTo(this.bot.entity.position) <= this.bot.pvp.attackRange && !this.bot.pathfinder?.isMoving()) {
-      this.bot.lookAt(this.entity.position.offset(0, this.entity.eyeHeight, 0), true);
-    }
-  }
-
-function combatLoop() {
-    this.updateEntity();
-    this.combatMovement();
-    this.combatTargeting(); 
-    this.combatAttacking(); 
-  }*/
