@@ -7,45 +7,17 @@ module.exports = function attach(bot) {
         allies = [];
         enemies = [];
 
-        mode = 2;
-
-        strafePoint = null;
-        distanceOld = null;
-
         constructor(bot) {
             this.bot = bot;
             this.debounce = false;
-        }
-        
-        doDecide = async () => {
-            this.updateTarget();
-            if (!this.bot.pvp.target) return;
-            
-            try {
-                this.doStrafe();
-                this.doAvoid();
-                this.doFloat();
-            } catch (error) {
-                ui.log(`{red-fg}[pupa_pvp]{/} Non-blocking chain failed: ${error}`);
-            }
-             
-            if (this.debounce) return;
-            this.debounce = true;
 
-            try {
-                await this.decideIfArmor();
-                await this.decideIfTotem();
-                await this.decideIfHeal();
-                await this.decideIfBuff();
+            this.lastDamage = 0;
+            this.lastHealth = 20;
 
-                await this.bot.pupa_inventory.equipHand();
-                await this.bot.pupa_inventory.equipOffHand();
+            this.strafePoint = null;
+            this.lastDist = null;
 
-                await this.decideIfToss();
-            } catch (error) {
-                ui.log(`{red-fg}[pupa_pvp]{/} Chain failed: ${error}`);
-            }
-            this.debounce = false;
+            this.mode = 2;
         }
 
         setMode(mode) {
@@ -73,8 +45,6 @@ module.exports = function attach(bot) {
                     return null;
             }
         }
-        lastDamage = 0;
-        lastHealth = 20;
 
         getLastDamage = () => {
             const health = this.bot.health + (this.bot.entity.metadata[11] || 0);
@@ -82,117 +52,146 @@ module.exports = function attach(bot) {
             
             if (delta > 0) this.lastDamage = delta;
             this.lastHealth = health;
-        }
+        };
 
-        decideIfToss = async () => {
-            const junk = new Set();
-            junk.add(bot.registry.itemsByName.compass.id);
-            junk.add(bot.registry.itemsByName.knowledge_book.id);
-            junk.add(bot.registry.itemsByName.glass_bottle.id);
-
-            return bot.pupa_inventory.tossJunk(junk);
-        }
-
-        decideIfTotem = async () => {
+        getHealthStatus = () => {
             const healthPoints = this.bot.health;
             const absorbPoints = this.bot.entity.metadata[11] || 0;
+            return { totalHealth: healthPoints + absorbPoints, healthPoints, absorbPoints };
+        };
 
-            const hasTotems = this.bot.pupa_utils.getItemCount('totem_of_undying') > 0;
-            const hasGapple = this.bot.pupa_utils.getItemCount('golden_apple') > 0;
-
-            if (!hasTotems) return;
-
-            const shouldTotem = (healthPoints + absorbPoints <= (this.lastDamage || 1)*1.6 || !hasGapple);
-            if (shouldTotem) {
-                ui.log(`
-{green-fg}[pupa_pvp]{/} Conditions for decideIfTotem met @ ${healthPoints} + ${absorbPoints}
-{green-fg}[pupa_pvp]{/} Regeneration effect?: ${this.bot.entity.effects['10'] ? 'applied' : 'not applied'}`);
-                return this.bot.pupa_inventory.equipTotem();
-            }
-        }
-        
-        decideIfHeal = async () => {
-            const healthPoints = this.bot.health;
-            const absorbPoints = this.bot.entity.metadata[11] || 0;
-
-            const regeneration = this.bot.entity.effects['10'];
-            const resistance = this.bot.entity.effects['11'];
-            const resistanceFire = this.bot.entity.effects['12'];
+        doDecide = async () => {
+            this.updateTarget();
+            if (!this.bot.pvp.target) return;
             
-            const hasTotems = this.bot.pupa_utils.getItemCount('totem_of_undying') > 0;
-            const hasGapple = this.bot.pupa_utils.getItemCount('golden_apple') > 0;
-        
-            if (!hasGapple) return;
-
-            const shouldHeal = (healthPoints + absorbPoints > (this.lastDamage || 1)*1.6 || !hasTotems) && 
-                               ((!resistance || !resistanceFire) || (healthPoints < 20 && !regeneration));
-            if (shouldHeal) {
-                ui.log(`
-{green-fg}[pupa_pvp]{/} Conditions for decideIfHeal met @ ${healthPoints} + ${absorbPoints}
-{green-fg}[pupa_pvp]{/} Regeneration effect?: ${regeneration ? 'applied' : 'not applied'}`);
-                return this.bot.pupa_inventory.equipGapple();
+            try {
+                this.doStrafe();
+                //this.doAvoid();
+                //this.doFloat();
+            } catch (error) {
+                ui.log(`{red-fg}[pupa_pvp]{/} Non-blocking chain failed: ${error}`);
             }
-        }
-        // not hit for n time? 3s // 
-        decideIfBuff = async () => {
-            const healthPoints = this.bot.health;
-            const absorbPoints = this.bot.entity.metadata[11] || 0;
+             
+            if (this.debounce) return;
+            this.debounce = true;
 
-            const strength = this.bot.entity.effects['5'];
+            try {
+                await this.decideIfArmor();
+                await this.decideIfTotem();
+                await this.decideIfHeal();
+                await this.decideIfBuff();
 
-            const hasTotems = this.bot.pupa_utils.getItemCount('totem_of_undying') > 0;
-            const hasGapple = this.bot.pupa_utils.getItemCount('golden_apple') > 0;
-            const hasPotion = this.bot.pupa_utils.getItemCount('potion') > 0;
+                await this.decideIfWeapon();
+                await this.decideIfUtility();
 
-            if (!hasPotion) return;
-
-            const shouldBuff = (healthPoints + absorbPoints > 10 || (!hasTotems && !hasGapple)) && !strength;
-            if (shouldBuff) {
-                return this.bot.pupa_inventory.equipBuff();
+                await this.decideIfToss();
+            } catch (error) {
+                ui.log(`{red-fg}[pupa_pvp]{/} Chain failed: ${error}`);
             }
-        }
+            this.debounce = false;
+        };
 
         decideIfArmor = async () => {
-            const healthPoints = this.bot.health;
-            const absorbPoints = this.bot.entity.metadata[11] || 0;
-
-            const hasArmor = this.bot.pupa_utils.getItemCount('diamond_helmet') + this.bot.pupa_utils.getItemCount('diamond_chestplate') + 
-                             this.bot.pupa_utils.getItemCount('diamond_leggings') + this.bot.pupa_utils.getItemCount('diamond_boots') > 0
-
-            if (!hasArmor) return;
-
-            const shouldArmor = healthPoints + absorbPoints > (this.lastDamage || 1)*1.6;
-
+            const shouldArmor = true;
             if (shouldArmor) {
                 return this.bot.pupa_inventory.equipArmor();
             }
         }
 
-        decideIfPearl = async () => {
+        decideIfTotem = async () => {
+            const { totalHealth } = this.getHealthStatus();
+
+            const hasTotems = this.bot.pupa_utils.hasItem('totem_of_undying');
+            const hasGapple = this.bot.pupa_utils.hasItem('golden_apple');
+
+            if (!hasTotems) return;
+
+            const shouldTotem = (totalHealth <= (this.lastDamage || 1)*1.6 || !hasGapple);
+            if (shouldTotem) {
+                return this.bot.pupa_inventory.equipTotem();
+            }
+        };
+        
+        decideIfHeal = async () => {
+            const { totalHealth, healthPoints } = this.getHealthStatus();
+
+            const regeneration = this.bot.entity.effects['10'];
             
+            const hasTotems = this.bot.pupa_utils.hasItem('totem_of_undying');
+            const hasGapple = this.bot.pupa_utils.hasItem('golden_apple');
+        
+            if (!hasGapple) return;
+
+            const shouldHeal = (totalHealth > (this.lastDamage || 1)*1.6 || !hasTotems) && 
+                               (healthPoints < 20 && !regeneration);
+            if (shouldHeal) {
+                return this.bot.pupa_inventory.equipGapple();
+            }
         }
 
-            //this.bot.pupa_inventory.equipBuff();
-            //this.bot.pupa_inventory.equipPearl();
-            // + 16 absorb + 30 seconds of 0.4 per second + 20% resist
-            
-            // average damage recieved + 
-            
-            /*                 but not < average dps                                                                                                                  ++                                                                                           
-            do dynamic calc based on DPS
+        decideIfBuff = async () => {
+            const { totalHealth } = this.getHealthStatus();
 
-            Fire Aspect adds 80 fire-ticks (4 seconds of burning) per level to the target, formula: (level × 4) – 1 #### FIRE RESIST nullifies, no need
+            const strength = this.bot.entity.effects['5'];
 
-            Sweep form  1 + Attack_Damage × (Sweeping_Edge_Level / (Sweeping_Edge_Level + 1)), rounded to the nearest integer
-            assume max ench   sharp formula 0.5 * level + 0.5
-            5 sharp sword
-            nether  	11 (15) 
-            diamond     10 (13.5) 
-            iron        9 (12) 
-            stone       8 (10.5) 
-            wood/gold   7 (9) 
-            */
+            const hasTotems = this.bot.pupa_utils.hasItem('totem_of_undying');
+            const hasGapple = this.bot.pupa_utils.hasItem('golden_apple');
+            const hasPotion = this.bot.pupa_utils.hasItem('potion');
 
+            if (!hasPotion) return;
+
+            const shouldBuff = (totalHealth > 10 || (!hasTotems && !hasGapple)) && !strength;
+            if (shouldBuff) {
+                return this.bot.pupa_inventory.equipBuff();
+            }
+        }
+
+        decideIfFood = async () => {
+            const { totalHealth } = this.getHealthStatus();
+
+            const hasTotems = this.bot.pupa_utils.hasItem('totem_of_undying');
+
+            const shouldFood = totalHealth > (this.lastDamage || 1)*1.6 || !hasTotems;
+            if (shouldFood) {
+                return this.bot.pupa_inventory.equipFood();
+            }   
+        }
+
+        decideIfUtility = async () => {
+            const { totalHealth } = this.getHealthStatus();
+
+            const hasTotems = this.bot.pupa_utils.hasItem('totem_of_undying');
+
+            const shouldUtility = totalHealth > (this.lastDamage || 1)*1.6 || !hasTotems;
+            if (shouldUtility) {
+                return this.bot.pupa_inventory.equipUtility();
+            }
+        }
+
+        decideIfWeapon = async () => {
+            const shouldWeapon = true;
+            if (shouldWeapon) {
+                return this.bot.pupa_inventory.equipWeapon();
+            }
+        }
+        
+        decideIfToss = async () => {
+            const junk = new Set([
+              bot.registry.itemsByName.compass.id,
+              bot.registry.itemsByName.knowledge_book.id,
+              bot.registry.itemsByName.glass_bottle.id
+            ]);
+
+            for (const id of junk) {
+              const item = this.bot.inventory.findInventoryItem(id, null);
+              if (item) {
+                ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${item.name} x${item.count}...`);
+                await this.bot.toss(item.type, item.metadata, item.count);
+                await this.bot.waitForTicks(2);
+                break; // toss only the first matching item
+              }
+            }
+        };
 
         doFloat = () => {
             const liquid = this.bot.pupa_utils.isInLiquid(this.bot.entity.position);
@@ -223,40 +222,38 @@ submerged = 1.62 height water
 
         updateTarget = () => {
             const target = this.bot.nearestEntity(this.getTargetFilter(this.mode));
-            if (target) this.bot.pvp.attack(target); else this.bot.pvp.forceStop();
+            target ? this.bot.pvp.attack(target) : this.bot.pvp.forceStop();
         }
-        
-
 
         doStrafe = () => {
-            const source = this.bot.entity.position;
-            const target = this.bot.pvp.target.position;
-
-            function distance2D(a, b) {
-                return Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
+          const { position: source } = this.bot.entity;
+          const target = this.bot.pvp?.target?.position;
+          if (!source || !target) return;
+        
+          const dist2D = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+        
+          // Ground phase: find strafe point and jump
+          if (this.bot.entity.onGround && source.distanceTo(target) <= 3.5) {
+            this.strafePoint = this.bot.pupa_utils.getStrafePoint(source, target);
+            if (this.strafePoint) {
+              const velocity = this.bot.pupa_utils.getJumpVelocity(source, this.strafePoint);
+              if (velocity) {
+                this.bot.entity.velocity.set(0, 0, 0);
+                this.bot.entity.velocity.set(...Object.values(velocity));
+              }
             }
-
-            if (!source || !target) return;
-
-            if (this.bot.entity.onGround && source.distanceTo(target) <= 3.5) {
-                this.strafePoint = this.bot.pupa_utils.getStrafePoint(source, target);
-                
-                const velocity = this.bot.pupa_utils.getJumpVelocity(source, this.strafePoint);
-                if (velocity) {
-                    this.bot.entity.velocity.set(0,0,0);
-                    this.bot.entity.velocity.set(...Object.values(velocity));
-                }
+          }
+      
+          // Air phase: adjust velocity while approaching strafe point
+          if (!this.bot.entity.onGround && this.strafePoint) {
+            const dist = dist2D(source, this.strafePoint);
+            if (dist < 0.5 && dist > (this.lastDist ?? -1)) {
+              const velocity = this.bot.pupa_utils.getFlatVelocity(source, this.strafePoint, 0, 0.05);
+              this.bot.entity.velocity.set(...Object.values(velocity));
             }
-
-                
-            if (!this.bot.entity.onGround && this.strafePoint && distance2D(source, this.strafePoint) < 0.5) {
-                if (distance2D(source, this.strafePoint) > this.distanceOld) {
-                    const velocity = this.bot.pupa_utils.getFlatVelocity(source, this.strafePoint, 0, 0.05);
-                    this.bot.entity.velocity.set(...Object.values(velocity));
-                }
-                this.lastDist = distance2D(source, this.strafePoint);
-            }
-        }
+            this.lastDist = dist;
+          }
+        };
     } // add worker threads    
     bot.pupa_pvp = new pupa_pvp(bot)
     return bot;

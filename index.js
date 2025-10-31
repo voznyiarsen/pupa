@@ -1,7 +1,5 @@
 require('dotenv').config();
 
-const util = require('node:util');
-
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const pvp = require('mineflayer-pvp').plugin;
@@ -54,7 +52,6 @@ function start_client() {
         bot.pvp.followRange = 3.45;
         
         bot.pvp.viewDistance = 128;
-        //ui.log(bot.pupa_utils.getJumpVelocity(new Vec3(419.5, 0, 163.5), new Vec3(420.5, 0, 163.5)));
     });
       
     bot.on('kicked', (reason) =>  {
@@ -72,7 +69,7 @@ function start_client() {
     bot.on('error', ui.log);
 
     bot.on('chat', async (username, message) => {
-        ui.log(`<${username}> ${message}`); /// [ 0, 0, 0, 1, 1, 1 ]
+        ui.log(`<${username}> ${message}`);
         switch (true) {
             case message == 'gg':
                 break;
@@ -81,24 +78,21 @@ function start_client() {
         }
     });
     
-    bot.on('entityHurt', async (entity, source) => {
+    bot.on('entityHurt', async (entity) => {
         if (entity.type === 'player' && entity.username === bot.username) {
             await bot.waitForTicks(1);
             bot.pupa_pvp.getLastDamage();
+            ui.log(bot.health, bot.food)
         }
     });
 
-    bot.on('playerCollect', async (collector, collected) => {
-        const junk = new Set();
-        junk.add(bot.registry.itemsByName.compass.id);
-        junk.add(bot.registry.itemsByName.knowledge_book.id);
-        junk.add(bot.registry.itemsByName.glass_bottle.id);
-
-        if (collector.username === bot.username) {
-            await bot.waitForTicks(2);
-            return bot.pupa_inventory.tossJunk(junk);
-        }
+    bot.on('health', async () => {
+        
     })
+    //bot.on('playerCollect', async (collector) => {});
+
+    // AKB
+    //bot._client.on('entity_velocity', () => bot.entity.velocity.set(0,bot.entity.velocity.y,0));
 }
 
 ui.onInput(text => {
@@ -117,7 +111,7 @@ process.on('warning', (warn) => ui.log(`{yellow-fg}[Warning]{/} ${warn}`));
     try {
         start_client();
     } catch (error) {
-        ui.log(`{red-fg}[Error]{/} Bot initialization failed: '${error}'`);
+        ui.log(`{red-fg}[Client]{/} Bot initialization failed: '${error}'`);
     }
 })();
 

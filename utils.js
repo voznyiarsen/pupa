@@ -1,14 +1,14 @@
 const { Vec3 } = require('vec3');
 
-const nbt = require('prismarine-nbt');
-
 module.exports = function attach(bot) {
     class pupa_utils {
         constructor(bot) {
-            this.bot = bot
+            this.bot = bot;
+            this.recentPoints = [];
+            this.recentPointsMax = 1;
         }
-        /*        
-        1.62 block height to head base for target entity.eyeHeight
+        /*  START      
+            ITEMS
         */
         getItemCount(itemId) {
           const itemType = bot.registry.itemsByName[itemId].id;
@@ -17,8 +17,11 @@ module.exports = function attach(bot) {
             .filter(item => item?.type === itemType)
             .reduce((acc, item) => acc + item.count, 0);
         }
-        /*
-
+        
+        hasItem = (itemName) => this.bot.inventory.items().some(item => item.name === itemName) ||
+                                Object.values(this.bot.entity.equipment).some(item => item?.name === itemName);
+        /*  END
+            ITEMS
         */
         /*  START 
             PROJECTILE MOTION         
@@ -70,6 +73,7 @@ module.exports = function attach(bot) {
             const dz = point.z - source.z;
             return dx * dx + dz * dz <= radius * radius;
         }
+
         isInBox(source, corner1, corner2) {
             const minX = Math.min(corner1[0], corner2[0]);
             const maxX = Math.max(corner1[0], corner2[0]);
@@ -84,6 +88,7 @@ module.exports = function attach(bot) {
                 source[2] >= minZ && source[2] <= maxZ
             );
         }
+
         isInUnwanted(source, height = 1.8, offset = 0.3) {
             const offsets = [offset, offset + 0.0625];
 
@@ -100,7 +105,7 @@ module.exports = function attach(bot) {
 
                         const block = this.bot.blockAt(point);
                     
-                        if (block && ['water', 'lava', 'web', 'cactus'].includes(block.name) || block && block.boundingBox != 'empty' && off === 0.3) {
+                        if (block && ['water', 'lava', 'web', 'cactus'].includes(block.name) || block && block.boundingBox !== 'empty' && off === 0.3) {
                             return block.position.offset(0.5, 0, 0.5);
                         }
                     }
@@ -125,6 +130,7 @@ module.exports = function attach(bot) {
             }
             return false;
         }
+
         isInLiquid(source, height = 1.8, width = 0.6) {
             const liquids = new Set();
             liquids.add(this.bot.registry.blocksByName.water.id);
@@ -144,38 +150,6 @@ module.exports = function attach(bot) {
         /*  END
             POINT IN POLYGON
         */
-        /*
-        async isNearPassable(point) { //boundingBox: empty
-            const yTop = point.y - 0.5;
-            const yBottom = yTop - 1;
-            // .shapes[0] 
-            // [x1, y1, z1, x2, y2, z2]  x0, 3,// z2, 5
-            for (let dx = -2; dx <= 2; dx++) {
-                for (let dz = -2; dz <= 2; dz++) {
-                    const x = point.x + dx;
-                    const z = point.z + dz;
-
-                    const blockTop = this.bot.blockAt(new Vec3(x, yTop, z));
-                    const blockBottom = this.bot.blockAt(new Vec3(x, yBottom, z));
-
-                    if (blockTop.boundingBox === 'empty' && blockBottom.boundingBox === 'empty') return true;
-
-                    const shapeTop = blockTop.shapes[0];
-                    const shapeBottom = blockBottom.shapes[0];
-
-                    let [dxTop, dzTop] = [0, 0];
-                    let [dxBottom, dzBottom] = [0, 0];
-                    
-                    const getDimensions = (shape) => [Math.abs(shape[0] - shape[3]), Math.abs(shape[2] - shape[5])];
-                    if (shapeTop) [dxTop, dzTop] = getDimensions(shapeTop);
-                    if (shapeBottom) [dxBottom, dzBottom] = getDimensions(shapeBottom);
-
-                    if ((dxTop < this.bot.entity.width || dzTop < this.bot.entity.width) && (dxBottom < this.bot.entity.width || dzBottom < this.bot.entity.width)) return true;
-                }
-            }
-            return false;
-        }
-        */
         /*  START
             MOVEMENT
         */
@@ -183,10 +157,8 @@ module.exports = function attach(bot) {
   Jump when chasing? (A* it?)
   True centre of a block is +0.5 x and z
   if within 0.1 area of point set V to 0
-*/
-        recentPoints = [];
-        recentPointsMax = 1;
-
+*/// if directly in front x=x or z=z with y=y both, keep calling getjumpvelocity on target pos 
+//                            and if shape is full  (draw line, if any point not touching block due to small shape = invalid) 
         getStrafePoint(source, target) {
             function distance2D(a, b) {
                 return Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2);
@@ -224,7 +196,7 @@ module.exports = function attach(bot) {
         getSolidBlocks(source) {
             const solids = [];
             const radius = 3; // [-3, -2, -1, 0, 1, 2, 3]
-        
+            // get blocks without blocks 1...3 high up (todo
             for (let xOffset = -radius; xOffset <= radius; xOffset++) {
                 for (let zOffset = -radius; zOffset <= radius; zOffset++) {
                     const startY = Math.floor(source.y);
@@ -271,6 +243,7 @@ module.exports = function attach(bot) {
         
             return new Vec3(vx, 0.42, vz);
         }
+
         getFlatVelocity(source, target, angleDegrees = 0, velocityXZ = 0.05, velocityY = this.bot.entity.velocity.y) {
             const dx = target.x - source.x;
             const dz = target.z - source.z;
@@ -284,106 +257,7 @@ module.exports = function attach(bot) {
         /*  END
             MOVEMENT
         */
-        
     }
     bot.pupa_utils = new pupa_utils(bot)
     return bot;
 }
-/*
-/////////
-function isInBlock(entity, block, hitboxHeight = 1.8, hitboxWidth = 0.3) {
-  // Convert block to an array if it's not already
-  const blocksToCheck = Array.isArray(block) ? block : [block];
-
-  // Define the offsets for the corners of the entity's hitbox
-  const cornerOffsets = [
-    new Vec3(-hitboxWidth, 0, -hitboxWidth), // Bottom-left-front corner
-    new Vec3(-hitboxWidth, 0, hitboxWidth),  // Bottom-left-back corner
-    new Vec3(hitboxWidth, 0, -hitboxWidth),  // Bottom-right-front corner
-    new Vec3(hitboxWidth, 0, hitboxWidth),   // Bottom-right-back corner
-    new Vec3(-hitboxWidth, hitboxHeight, -hitboxWidth), // Top-left-front corner
-    new Vec3(-hitboxWidth, hitboxHeight, hitboxWidth),  // Top-left-back corner
-    new Vec3(hitboxWidth, hitboxHeight, -hitboxWidth),  // Top-right-front corner
-    new Vec3(hitboxWidth, hitboxHeight, hitboxWidth)    // Top-right-back corner
-  ];
-
-  // Check the vertical faces (front, back, left, right) and corners
-  for (let dy = 0; dy <= hitboxHeight; dy += 0.6) { // Check vertically
-    // Front face (positive Z-axis)
-    const frontBlock = bot.blockAt(entity.position.offset(0, dy, hitboxWidth));
-    if (frontBlock && blocksToCheck.includes(frontBlock.name)) {
-      return true; // Collision detected on front face
-    }
-
-    // Back face (negative Z-axis)
-    const backBlock = bot.blockAt(entity.position.offset(0, dy, -hitboxWidth));
-    if (backBlock && blocksToCheck.includes(backBlock.name)) {
-      return true; // Collision detected on back face
-    }
-
-    // Left face (negative X-axis)
-    const leftBlock = bot.blockAt(entity.position.offset(-hitboxWidth, dy, 0));
-    if (leftBlock && blocksToCheck.includes(leftBlock.name)) {
-      return true; // Collision detected on left face
-    }
-
-    // Right face (positive X-axis)
-    const rightBlock = bot.blockAt(entity.position.offset(hitboxWidth, dy, 0));
-    if (rightBlock && blocksToCheck.includes(rightBlock.name)) {
-      return true; // Collision detected on right face
-    }
-
-    // Check corners of the entity's hitbox
-    for (const offset of cornerOffsets) {
-      const cornerPos = entity.position.offset(offset.x, offset.y, offset.z);
-      const cornerBlock = bot.blockAt(cornerPos);
-      if (cornerBlock && blocksToCheck.includes(cornerBlock.name)) {
-        return true; // Collision detected on a corner
-      }
-    }
-  }
-
-  // No collision detected
-  return false;
-}
-/*
-2/2 for bot
-3/1 for entity 
-
-let lastCallTime = 0; // Timestamp of the last function call
-let cachedBlocks = []; // Cached result of the last function call
-
-function blocksNear(entity, block, maxDistance = 2, count = 2) {
-  const now = Date.now();
-
-  // If the function was called within the last 500ms, return the cached result
-  if (now - lastCallTime < 200) {
-    return cachedBlocks;
-  }
-
-  // Update the last call time
-  lastCallTime = now;
-
-  // Find blocks near the entity
-  const blocks = bot.findBlocks({
-    point: entity?.position,
-    matching: bot.registry.blocksByName[block]?.id,
-    maxDistance,
-    count,
-  });
-
-  // Adjust block positions (center them)
-  const adjustBlockPosition = (block) => {
-    if (block) {
-      block.set(block.x + 0.5, block.y, block.z + 0.5);
-    }
-  };
-
-  // Adjust positions for blocks
-  blocks.forEach(adjustBlockPosition);
-
-  // Cache the result
-  cachedBlocks = blocks;
-
-  return blocks;
-}*/

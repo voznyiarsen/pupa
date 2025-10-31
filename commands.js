@@ -151,7 +151,18 @@ module.exports = function attach(bot) {
                             await this.bot.chat('/gamemode 0');
                             await this.bot.waitForTicks(5);
                         }
-                break;                
+                break;   
+                case /^com$/.test(data): {
+                    const listener = this.bot.pupa_pvp.doDecide;
+                    if (this.bot.listenerCount('physicsTick', listener) > 0) {
+                        ui.log(`{red-fg}[pupa_pvp]{/} Combat disabled`);
+                        this.bot.off('physicsTick', listener);
+                        this.bot.pvp.stop();
+                    } else {
+                        ui.log(`{green-fg}[pupa_pvp]{/} Combat enabled`);
+                        this.bot.on('physicsTick', listener);
+                    }
+                } break;             
                 case /^t1$/.test(data): {
                     const source = this.bot.entity.position;
                     const target = this.bot.players['Patr10t'].entity.position;
@@ -294,51 +305,19 @@ module.exports = function attach(bot) {
                 case /^t9$/.test(data): {
                     ui.log(util.inspect(this.bot.inventory.slots,true,null,true));
                 } break;
-                case /^t10$/.test(data): {
-                    const listener = this.bot.pupa_pvp.doDecide;
-                    if (this.bot.listenerCount('physicsTick', listener) > 0) {
-                        ui.log(`{red-fg}[pupa_pvp]{/} Disabling combat`);
-                        this.bot.pvp.forceStop();
-                        this.bot.off('physicsTick', listener);
-                    } else {
-                        ui.log(`{green-fg}[pupa_pvp]{/} Enabling combat`);
-                        this.bot.on('physicsTick', listener);
-                    }
-                } break;
                 case /^t11$/.test(data): {
-                    ui.log(util.inspect(this.bot.blockAt(this.bot.entity.position),true,null,true));
+                    const slot = this.bot.getEquipmentDestSlot('off-hand');
+                    const currentOffHand = this.bot.inventory.slots[slot];
+
+                    ui.log(this.bot.registry.foods)
                 } break;
                 case /^t12$/.test(data): {
-                    ui.log(`distance ${this.bot.entity.position.distanceTo(this.bot.players['Patr10t'].entity.position)}`)
-                    ui.log(`pvp pathf? ${this.bot.pathfinder.isMoving()}`)
+                    this.bot.pupa_inventory.equipFood();
+                    
                 } break;
-                    /* PATHFIND */
-                /*
-                case /^goto -?\d*\s?-?\d*\s?-?\d*$/.test(data): 
-                    if (piece.length === 4) {
-                        let [x, y, z] = [piece[1], piece[2], piece[3]];
-                        x = parseInt(x, 10);
-                        y = parseInt(y, 10);
-                        z = parseInt(z, 10);
-                        
-                        const goal = new GoalNear(x, y, z, 1);
-                        this.bot.pathfinder.setGoal(goal);
-
-                    } else if (piece.length === 3) {
-                        let [x, z] = [piece[1], piece[2]];
-                        x = parseInt(x, 10);
-                        z = parseInt(z, 10);
-                        
-                        const goal = new GoalXZ(x, z);
-                        this.bot.pathfinder.setGoal(goal);
-
-                        return `Set goal to X: ${x} Z: ${z}`;
-                    }
-                    break;
-                */
                 /* CHANGE MODE */
                 case /^cm(\s[0-3])?$/.test(data):
-                    this.bot.pupa_pvp.setMode(command[1]);
+                    this.bot.pupa_pvp.setMode(parseInt(command[1], 10));
                     ui.log(`{green-fg}[pupa_pvp]{/} Mode changed to ${this.bot.pupa_pvp.mode}`);
                     break;
                 /* ENABLE/DISABLE COMBAT */
