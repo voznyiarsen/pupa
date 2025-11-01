@@ -1,165 +1,93 @@
 const ui = require('./tui')();
 
 const util = require('node:util');
-const vm = require('vm');
 
 module.exports = function attach(bot) {
     class pupa_commands {
         constructor(bot) {
             this.bot = bot;
+            this.autosend = false;
+            this.banner = { good: `{green-fg}[commands]{/}`, bad: `{red-fg}[commands]{/}` };
         }
-        async exec(codeString) {
-            const context = {
-                console: console,
-                require: require,
-                process: process,
-                setTimeout,
-                setInterval,
-                setImmediate,
-                clearTimeout,
-                clearInterval,
-                clearImmediate,
-                ui,
-                bot
-            };
-
-            vm.createContext(context);
         
-            try {
-                const script = new vm.Script(codeString, { 
-                    filename: 'command.vm',
-                    displayErrors: true 
-                });
-
-                const result = script.runInContext(context, { 
-                    displayErrors: true,
-                    timeout: 5000 
-                });
-
-                if (result instanceof Promise) {
-                    return await result;
-                }
-                return result;
-            } catch (error) {
-                if (error.name === 'SyntaxError' || 
-                    error.name === 'ReferenceError' || 
-                    error.name === 'TypeError') {
-                    throw new Error(`Execution error: ${error.message}`);
-                }
-                throw error;
-            }
-        }
         async query(data) { 
             const command = data.split(' ');
             switch(true) {
-                case /^x .+$/.test(data):
-                    this.exec(command[1]);
-                    break;
+                case /^as$/.test(data):
+                    this.autosend = !this.autosend;
+                    ui.log(`${this.autosend ? `${this.banner.good} Autosending enabled` : `${this.banner.bad} Autosending disabled`}`);
+                break;
                 /* TOSS ITEMS */
-                case /^ts \d{1,3}(\s\d+)?$/.test(data): // ITEM | COUNT
+                case /^ts [\d\w_]+\s?\d*$/.test(data): // ITEM | COUNT
                     if (command.length === 3) {
-                        ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${this.bot.registry.items[parseInt(command[1])].displayName} x${parseInt(command[2])}`);           
-                        this.bot.toss(parseInt(command[1]), null, parseInt(command[2]));
+                        const item = this.bot.registry.items[parseInt(command[1])] || this.bot.registry.itemsByName[command[1]];
+                        const count = parseInt(command[2]);
+
+                        await this.bot.toss(item.id, null, count)
+                                      .then(() => ui.log(`${this.banner.good} Tossed ${item.displayName} x${count}`))
+                                      .catch(error => ui.log(`${this.banner.bad} Failed to toss ${item.displayName}: ${error}`));
                     } else {
-                        ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${this.bot.registry.items[parseInt(command[1])].displayName}`);             
-                        this.bot.toss(parseInt(command[1]));
+                        const item = this.bot.registry.items[parseInt(command[1])] || this.bot.registry.itemsByName[command[1]];
+
+                        await this.bot.toss(item.id)
+                                      .then(() => ui.log(`${this.banner.good} Tossed ${item.displayName} x1`))
+                                      .catch(error => ui.log(`${this.banner.bad} Failed to toss ${item.displayName}: ${error}`));
                     }
-                    break;
-                case /^ts \w+(\s\d+)?$/.test(data): // ITEM | COUNT
-                    if (command.length === 3) {
-                        ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${this.bot.registry.itemsByName[command[1]].displayName} x${parseInt(command[2])}`);           
-                        this.bot.toss(this.bot.registry.itemsByName[command[1]].id, null, parseInt(command[2]));
-                    } else {
-                        ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${this.bot.registry.itemsByName[command[1]].displayName}`);             
-                        this.bot.toss(this.bot.registry.itemsByName[command[1]].id);
-                    }
-                    break;
-                case /^tsall$/.test(data):
-                    ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${this.bot.inventory.slots.filter(Boolean).length} ${this.bot.inventory.slots.filter(Boolean).length === 1 ? 'item' : 'items'}`);
-                    this.bot.pupa_inventory.tossAllItems();
-                    break;
+                break;
+                case /^tsall$/.test(data): {
+                    const count = this.bot.inventory.slots.filter(Boolean).length;
+                    this.bot.pupa_inventory.tossAllItems()
+                                           .then(() => ui.log(`${this.banner.good} Tossed ${count} ${count === 1 ? 'item' : 'items'}`))
+                                           .catch(error => ui.log(`${this.banner.bad} Failed to toss ${count} ${count === 1 ? 'item' : 'items'}: ${error}`));
+                } break;
                 /* EQUIP ITEMS */
                 case /^eq [\d\w_]+ [\w-]+$/.test(data): { // ITEM | DESTINATION
                     const destination = command[2];
                     const slot = this.bot.getEquipmentDestSlot(destination);
                     const item = this.bot.registry.items[parseInt(command[1])] || this.bot.registry.itemsByName[command[1]];
 
-                    ui.log(`{blue-fg}[pupa_inventory]{/} Equipping ${item.displayName} to ${destination} (${slot})`);      
-                    await this.bot.equip(parseInt(item.id), destination); 
-                    } break;
-                /* UNEQIUP ITEMS */
-                case /^uneq [\w-]+$/.test(data): { // DESTINATION
+                    this.bot.equip(parseInt(item.id), destination)
+                            .then(() => ui.log(`${this.banner.good} Eqipped ${item.displayName} to ${destination} (${slot})`))
+                            .catch(error => ui.log(`${this.banner.bad} Failed to equip ${item.displayName} to ${destination} (${slot}): ${error}`));
+                } break;
+                /* UNEQUIP ITEMS */
+                case /^uneq [\w-]+$/.test(data): {
                     const destination = command[1];
                     const slot = this.bot.getEquipmentDestSlot(destination);
                     const item = this.bot.inventory.slots[slot];
 
-                    ui.log(`{blue-fg}[pupa_inventory]{/} Unequipping ${item.displayName} from ${destination} (${slot})`);
-                    await this.bot.unequip(destination);
+                    this.bot.unequip(destination)
+                            .then(() => ui.log(`${this.banner.good} Unequipped ${item.displayName} from ${destination} (${slot})`))
+                            .catch(error => ui.log(`${this.banner.bad} Failed to unequip ${item.displayName} from ${destination} (${slot}): ${error}`));
                 } break;
                 case /^uneqall$/.test(data): {
-                    ui.log(`{blue-fg}[pupa_inventory]{/} Unequipping all equipped items...`);
-                    await this.bot.pupa_inventory.unequipAllItems();
+                    const count = this.bot.entity.equipment.filter(Boolean).length;
+                    this.bot.pupa_inventory.unequipAllItems()
+                                           .then(() => ui.log(`${this.banner.good} Unequipped ${count} ${count === 1 ? 'item' : 'items'}`))
+                                           .catch(error => ui.log(`${this.banner.bad} Failed to unequip ${count} ${count === 1 ? 'item' : 'items'}: ${error}`));
                 } break;
-                case /^ver$/.test(data):
+                case /^v(er(sion)?)?$/.test(data):
                     ui.log(this.bot.version);
                 break
-                case /^res\s?[\d\w]*$/.test(data):
-                    ui.log(`{blue-fg}[pupa_inventory]{/} Restoring inventory...`);
-                    this.bot.pupa_inventory.restoreInventory(command[1]);
-                break
-                case /^rec\s?[\d\w]*$/.test(data): {
-                        const fs = require('node:fs');
-                        const slot = command[1] ? command[1] : 0 
-
-                        const array = this.bot.inventory.slots.filter((item) => item !== null && item.type !== null);
-                        const filename = `./recording-${slot}.json`
-
-                        const data = array.map(element => ({
-                            type: element.type, 
-                            count: element.count, 
-                            metadata: element.metadata, 
-                            nbt: element.nbt, 
-                            slot: element.slot 
-                        }));
-
-                        const json = JSON.stringify(data, null, 2);
-
-                        fs.writeFile(filename, json, (error) => {
-                            if (error) {
-                                ui.log(`{red-fg}[pupa_utils]{/} Recording failed: ${error}`);
-                            } else {
-                                ui.log(`{green-fg}[pupa_utils]{/} ${data.length} items recorded into slot ${slot}`);
-                            }
-                        });
+                case /^res(tore)?\s?[\d\w-_]*$/.test(data): {
+                    const slot = command[1] ? command[1] : 0;
+                    await this.bot.pupa_inventory.restoreInventory(slot);
+                } break;
+                case /^rec(ord)?\s?[\d\w-_]*$/.test(data): {
+                    const slot = command[1] ? command[1] : 0;
+                    await this.bot.pupa_inventory.recordInventory(slot);
                 } break;
                 case /^clear$/.test(data):
-                        while (this.bot.player.gamemode != 1) {
-                            ui.log(`{blue-fg}[pupa_inventory]{/} Current gamemode: ${this.bot.player.gamemode}, setting to 1`);
-                            await this.bot.chat('/gamemode 1');
-                            await this.bot.waitForTicks(5);
-                        }
-                        if (this.bot.player.gamemode === 1) {
-                            try {
-                                await this.bot.creative.clearInventory();
-                                ui.log(`{green-fg}[pupa_inventory]{/} Inventory cleared`);
-                            } catch (error) {
-                                ui.log(`{red-fg}[pupa_inventory]{/} Inventory clear failed: ${error}`);
-                            }
-                        }
-                        while (this.bot.player.gamemode != 0) {
-                            ui.log(`{blue-fg}[pupa_inventory]{/} Current gamemode: ${this.bot.player.gamemode}, setting to 0`);
-                            await this.bot.chat('/gamemode 0');
-                            await this.bot.waitForTicks(5);
-                        }
+                    await this.bot.pupa_inventory.clearInventory();
                 break;   
-                case /^com$/.test(data): {
+                case /^com(bat)?$/.test(data): {
                     const listener = this.bot.pupa_pvp.doDecide;
                     if (this.bot.listenerCount('physicsTick', listener) > 0) {
-                        ui.log(`{red-fg}[pupa_pvp]{/} Combat disabled`);
+                        ui.log(`${this.banner.bad} Combat disabled`);
                         this.bot.off('physicsTick', listener);
                         this.bot.pvp.stop();
                     } else {
-                        ui.log(`{green-fg}[pupa_pvp]{/} Combat enabled`);
+                        ui.log(`${this.banner.good} Combat enabled`);
                         this.bot.on('physicsTick', listener);
                     }
                 } break;             
@@ -304,12 +232,13 @@ module.exports = function attach(bot) {
                 } break;
                 case /^t9$/.test(data): {
                     ui.log(util.inspect(this.bot.inventory.slots,true,null,true));
+                    ui.log(this.bot.registry.items[this.bot.registry.itemsByName.golden_sword.id])
                 } break;
                 case /^t11$/.test(data): {
-                    const slot = this.bot.getEquipmentDestSlot('off-hand');
-                    const currentOffHand = this.bot.inventory.slots[slot];
+                    const foods = this.bot.registry.foods;
 
-                    ui.log(this.bot.registry.foods)
+                    ui.log(foods)
+                    ui.log(foods[436])
                 } break;
                 case /^t12$/.test(data): {
                     this.bot.pupa_inventory.equipFood();
@@ -369,20 +298,17 @@ module.exports = function attach(bot) {
                 /* LIST ELEMENTS */
                 case /^i$/.test(data):
 
-
-                    getItems();
                 break;
-                case /^p$/.test(data): {
-                    const players = this.bot.players 
-
-                    
-                } break;    
+                case /^p$/.test(data): 
+                
+                break;    
                 /* QUIT */
                 case /^q$/.test(data):
                     this.bot.end();
                     process.exit(0);
                 default:
-                    return false;
+                    ui.log(`${this.banner.bad} Command ${data} not found, ${this.autosend ? "sending as message..." : "not sending as a message"} `);
+                    if (this.autosend) bot.chat(data);
             }
         }
     }

@@ -89,19 +89,10 @@ function start_client() {
     bot.on('health', async () => {
         
     })
-    //bot.on('playerCollect', async (collector) => {});
-
-    // AKB
-    //bot._client.on('entity_velocity', () => bot.entity.velocity.set(0,bot.entity.velocity.y,0));
 }
 
 ui.onInput(text => {
-    if (!text.match(/^\s?$/)) {
-        if (bot.pupa_commands.query(text) === false) {
-            ui.log(`{green-fg}Sending:{/} "${text}"`);
-            bot.chat(text);
-        }
-    }
+    if (!text.match(/^\s?$/)) bot.pupa_commands.query(text);
 });
 
 process.on('uncaughtException', (err, origin) => ui.log(`{yellow-fg}[Exception]{/} ${err} at origin: ${origin}`));

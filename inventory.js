@@ -7,36 +7,67 @@ module.exports = function attach(bot) {
     class pupa_inventory {
         constructor(bot) {
             this.bot = bot;
+            this.banner = { good: `{green-fg}[inventory]{/}`, bad: `{red-fg}[inventory]{/}` };
         }
 
-        async restoreInventory(slot = 0) {         
+        async clearInventory() {
+            await this.setGamemode(1);
+            try {
+                await this.bot.creative.clearInventory();
+                ui.log(`${this.banner.good} Inventory cleared`);
+            } catch (error) {
+                ui.log(`${this.banner.bad} Failed to clear inventory: ${error}`);
+            }
+            await this.setGamemode(0);
+        }
+        
+        async recordInventory(slot = 0) {
+            const fs = require('node:fs');
+            const array = this.bot.inventory.slots.filter(item => item?.type);
+            const data = array.map(({ type, count, metadata, nbt, name, displayName, slot }) => 
+                ({ type, count, metadata, nbt, name, displayName, slot })
+            );
+            const filename = `./recording-${slot}.json`;
+            fs.writeFile(filename, JSON.stringify(data, null, 2), (error) =>
+                error ? ui.log(`${this.banner.bad} Failed to record inventory: ${error}`) : 
+                       ui.log(`${this.banner.good} ${data.length} items recorded into slot ${slot}`)
+            );
+        }
+        
+        async restoreInventory(slot = 0) {
             const data = require(`./recording-${slot}.json`);
+            await this.setGamemode(1);
             
-            for (const object of data) {
-                while (this.bot.player.gamemode != 1) {
-                    this.bot.chat('/gamemode 1');
-                    await this.bot.waitForTicks(2);
-                }
+            for (const item of data) {
                 try {
-                    const item = new Item(object.type, object.count, object.metadata, object.nbt);
-                    await this.bot.creative.setInventorySlot(object.slot, item);
+                    const newItem = new Item(item.type, item.count, item.metadata, item.nbt);
+                    await this.bot.creative.setInventorySlot(item.slot, newItem);
                     await this.bot.waitForTicks(2);
-                    ui.log(`{green-fg}[pupa_inventory]{/} Set slot ${object.slot} with ${object.type}`);
+                    ui.log(`${this.banner.good} Slot ${item.slot} (item: ${item.displayName})`);
                 } catch (error) {
-                    ui.log(`{red-fg}[pupa_inventory]{/} Error setting slot ${object.slot}: ${error}`);
+                    ui.log(`${this.banner.bad} Failed to set slot ${item.slot}: ${error}`);
                 }
             }
             
-            ui.log(`{blue-fg}[pupa_inventory]{/} Processed ${data.length} items (slot ${slot})`);
-
-            while (this.bot.player.gamemode != 0) {
-                this.bot.chat('/gamemode 0');
+            ui.log(`${this.banner.good} Processed ${data.length} items (slot ${slot})`);
+            await this.setGamemode(0);
+        }
+        
+        async setGamemode(mode, timeout = 1000) {
+            const t0 = Date.now();
+            while (this.bot.player.gamemode !== mode) {
+                if (Date.now() - t0 > timeout) {
+                    ui.log(`${this.banner.bad} Timeout reached while setting gamemode to ${mode}`);
+                    return;
+                }
+                ui.log(`${this.banner.good} Current gamemode: ${this.bot.player.gamemode}, setting to ${mode}`);
+                await this.bot.chat(`/gamemode ${mode}`);
                 await this.bot.waitForTicks(2);
             }
         }
 
         async unequipAllItems() {
-            const destinations = ['head', 'torso', 'legs', 'feet', 'off-hand'];
+            const destinations = ['head', 'torso', 'legs', 'feet', 'off-hand'];  // bot.entity.equipment list?
             for (const destination of destinations) {
                 const slot = this.bot.getEquipmentDestSlot(destination);
                 if (this.bot.inventory.slots[slot] !== null) {
@@ -94,7 +125,7 @@ module.exports = function attach(bot) {
                 const currentScore = currentArmor ? this._computeArmorScore(currentArmor, materialStats, slotMap[slot]) : -1;
             
                 if (bestScore > currentScore) {
-                    ui.log(`{green-fg}[pupa_inventory]{/} Equipping ${bestItem.displayName} to ${slot} (score: ${bestScore})...`);
+                    ui.log(`${this.banner.good} Equipping ${bestItem.displayName} to ${slot} (score: ${bestScore})...`);
                     await this.bot.equip(bestItem, slot);
                     await this.bot.waitForTicks(2);
                 }
@@ -136,33 +167,37 @@ module.exports = function attach(bot) {
             const gapples = inventory.filter(item => item.name === 'golden_apple');
             const gapple = gapples.find(item => item.metadata === 1) || 
                            gapples.find(item => item.metadata === 0);
-
             if (!gapple) return;
 
             const slot = this.bot.getEquipmentDestSlot('off-hand');
-            const currentOffHand = this.bot.inventory.slots[slot];
 
-            if (!currentOffHand || currentOffHand.type !== gapple.type || currentOffHand.metadata !== gapple.metadata) {
-                ui.log(`{blue-fg}[pupa_inventory]{/} Equipping ${gapple.displayName} (metadata: ${gapple.metadata}) to off-hand...`);
+            const timeout = 2000;
+            let t0 = Date.now();
+
+            while (this.bot.inventory.slots[slot]?.type !== gapple.type || this.bot.inventory.slots[slot].metadata !== gapple.metadata) {
+                if (Date.now() - t0 > timeout) {
+                    ui.log(`${this.banner.bad} Timeout reached while equipping ${gapple.displayName} (#${gapple.type}/${gapple.metadata})`)
+                    return;
+                }
+                ui.log(`${this.banner.good} Equipping ${gapple.displayName} (#${gapple.type}/${gapple.metadata}) to off-hand...`);
                 await this.bot.equip(gapple, 'off-hand');
-                //await this.bot.waitForTicks(2);
+                await this.bot.waitForTicks(2);
             }
         
-            const timeout = 2000;
-            const startTime = performance.now();
-            ui.log(`{blue-fg}[pupa_inventory]{/} Using ${gapple.displayName} (metadata: ${gapple.metadata})...`);
+            ui.log(`${this.banner.good} Using ${gapple.displayName} (#${gapple.type}/${gapple.metadata})...`);
             this.bot.activateItem(true);
         
+            t0 = Date.now();
             while (!this.bot.entity.effects['10']) {
-                if (performance.now() - startTime > timeout) {
-                    ui.log(`{red-fg}[pupa_inventory]{/} Timeout reached while using ${gapple.displayName} (metadata: ${gapple.metadata})`);
+                if (Date.now() - t0 > timeout) {
+                    ui.log(`${this.banner.bad} Timeout reached while using ${gapple.displayName} (#${gapple.type}/${gapple.metadata})`);
                     this.bot.deactivateItem();
                     return;
                 }
                 await this.bot.waitForTicks(2);
             }
         
-            ui.log(`{green-fg}[pupa_inventory]{/} ${gapple.displayName} used successfully`);
+            ui.log(`${this.banner.good} Used ${gapple.displayName} (#${gapple.type}/${gapple.metadata}) successfully`);
             this.bot.deactivateItem();
         }
 
@@ -173,88 +208,130 @@ module.exports = function attach(bot) {
                 ...Object.values(this.bot.entity.equipment).filter(item => item != null)
             ];
         
-            const foodItems = inventory.filter(item => foods[item.type] !== undefined);
+            const items = inventory.filter(item => foods[item.type] !== undefined);
+            if (items.length === 0) return;
         
-            if (foodItems.length === 0) return;
-        
-            const bestFood = foodItems.reduce((best, current) =>
-                foods[current.type].foodPoints > foods[best.type].foodPoints ? current : best
-            );
-        
-            const slot = this.bot.getEquipmentDestSlot('off-hand');//
-            const offHand = this.bot.inventory.slots[slot];
-        
-            if (!offHand || offHand.type !== bestFood.type || offHand.metadata !== bestFood.metadata) {
-                ui.log(`{blue-fg}[pupa_inventory]{/} Equipping ${bestFood.displayName} to off-hand...`);
-                await this.bot.equip(bestFood, 'off-hand');
-            }
-        
-            ui.log(`{blue-fg}[pupa_inventory]{/} Using ${bestFood.displayName}...`);
-            this.bot.activateItem(true);
+            const food = items.reduce((best, current) => foods[current.type].foodPoints > foods[best.type].foodPoints ? current : best);
+            if (!food) return;
+
+            const slot = this.bot.getEquipmentDestSlot('off-hand');
         
             const timeout = 2000;
-            const startTime = Date.now();
-            const startCount = this.bot.inventory.slots[slot].count
+            let t0 = Date.now();
+    
+            while (this.bot.inventory.slots[slot]?.type !== food.type || this.bot.inventory.slots[slot].metadata !== food.metadata) {
+                if (Date.now() - t0 > timeout) {
+                    ui.log(`${this.banner.bad} Timeout reached while equipping ${food.displayName} (#${food.type}/${food.metadata})`)
+                    return;
+                }
+                ui.log(`${this.banner.good} Equipping ${food.displayName} (#${food.type}/${food.metadata}) to off-hand...`);
+                await this.bot.equip(food, 'off-hand');
+                await this.bot.waitForTicks(2);
+            }
         
-            ui.log(this.bot.food,'then');
-            while (this.bot.inventory.slots[slot].count >= startCount) {
-                if (Date.now() - startTime > timeout) {
-                    ui.log(`{red-fg}[pupa_inventory]{/} Timeout reached while using ${bestFood.displayName}`);
+            const expectedHunger = this.bot.food + foods[food.type].foodPoints;
+
+            ui.log(`${this.banner.good} Using ${food.displayName} #${food.type}/${food.metadata})...`);
+            this.bot.activateItem(true);
+
+            t0 = Date.now();
+            while (this.bot.food < expectedHunger && this.bot.food < 20) {
+                if (Date.now() - t0 > timeout) {
+                    ui.log(`${this.banner.bad} Timeout reached while using ${food.displayName} (#${food.type}/${food.metadata})`);
                     this.bot.deactivateItem();
                     return;
                 }
                 await this.bot.waitForTicks(2);
             }
         
-            ui.log(`{green-fg}[pupa_inventory]{/} ${bestFood.displayName} used successfully.`);
-            ui.log(this.bot.food,'now');
+            ui.log(`${this.banner.good} Used ${food.displayName} (#${food.type}/${food.metadata}) successfully`);
             this.bot.deactivateItem();
         }
 
         async equipBuff() {
-            const buff = this.bot.inventory.findInventoryItem(this.bot.registry.itemsByName.potion.id, null);
-            if (!buff || nbt.simplify(buff.nbt).Potion != 'minecraft:strong_strength') return;
+            const inventory = [
+              ...this.bot.inventory.items(),
+              ...Object.values(this.bot.entity.equipment).filter(item => item != null)
+            ];
 
-            while (this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== buff.type) {
-                ui.log(`{blue-fg}[pupa_inventory]{/} Equipping ${buff.displayName} to off-hand...`);
-                await this.bot.equip(buff, 'off-hand');
+            const potions = inventory.filter(item => item.name === 'potion');
+            const potion = potions.find(item => nbt.simplify(item.nbt).Potion === 'minecraft:strong_strength') || 
+                           potions.find(item => nbt.simplify(item.nbt).Potion === 'minecraft:strength');
+
+            if (!potion) return;
+
+            const slot = this.bot.getEquipmentDestSlot('off-hand');
+
+            const timeout = 2000;
+            let t0 = Date.now();
+
+            while (this.bot.inventory.slots[slot]?.type !== potion.type) {
+                if (Date.now() - t0 > timeout) {
+                    ui.log(`${this.banner.bad} Timeout reached while equipping ${potion.displayName} (#${potion.type}/${potion.metadata})`)
+                    return;
+                }
+                ui.log(`${this.banner.good} Equipping ${potion.displayName} (#${potion.type}/${potion.metadata}) to off-hand...`);
+                await this.bot.equip(potion, 'off-hand');
                 await this.bot.waitForTicks(2);
             }
 
-            const timeout = 2000;
-            const startTime = performance.now();
-
-            ui.log(`{blue-fg}[pupa_inventory]{/} Using ${buff.displayName}...`);
+            ui.log(`${this.banner.good} Using ${potion.displayName} (#${potion.type}/${potion.metadata})...`);
             this.bot.activateItem(true);
 
+            t0 = Date.now();
             while (!this.bot.entity.effects['5']) {
-                if (performance.now() - startTime > timeout) {
-                    ui.log(`{red-fg}[pupa_inventory]{/} Timeout reached while using ${buff.displayName}`);
+                if (Date.now() - t0 > timeout) {
+                    ui.log(`${this.banner.bad} Timeout reached while using ${potion.displayName} (#${potion.type}/${potion.metadata})`);
                     this.bot.deactivateItem();
                     return;
                 }
                 await this.bot.waitForTicks(2); 
             }
 
-            ui.log(`{green-fg}[pupa_inventory]{/} ${buff.displayName} used successfully`);
+            ui.log(`${this.banner.good} Used ${potion.displayName} (#${potion.type}/${potion.metadata}) successfully`);
             this.bot.deactivateItem();
         }
 
         async equipTotem() {
             const totem = this.bot.inventory.findInventoryItem(this.bot.registry.itemsByName.totem_of_undying.id, null);
+
             if (!totem) return;
+
+            const timeout = 1000;
+            const t0 = Date.now();
+
             while (this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== totem.type) {
-                ui.log(`{green-fg}[pupa_inventory]{/} Equipping ${totem.displayName} to off-hand...`);
+                if (Date.now - t0 > timeout) {
+                    ui.log(`${this.banner.bad} Timeout reached while equipping ${totem.displayName} (#${totem.type}/${totem.metadata})`)
+                    return;
+                }
+                ui.log(`${this.banner.good} Equipping ${totem.displayName} (#${totem.type}/${totem.metadata}) to off-hand...`);
                 await this.bot.equip(totem, 'off-hand');
                 await this.bot.waitForTicks(2);
             }
         }
 
         async equipPearl() {
-            const pearl = this.bot.inventory.findInventoryItem(bot.registry.itemsByName.ender_pearl.id, null);
+            const inventory = [
+              ...this.bot.inventory.items(),
+              ...Object.values(this.bot.entity.equipment).filter(item => item != null)
+            ];
+
+            const pearl = inventory.find(item => item.name === 'ender_pearl');
+
             if (!pearl) return;
-            while (this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]?.type !== pearl.type) {
-                ui.log(`{blue-fg}[pupa_inventory]{/} Equipping ${pearl.displayName} to off-hand...`);
+
+            const slot = this.bot.getEquipmentDestSlot('off-hand');
+
+            const timeout = 1000;
+            const t0 = Date.now();
+
+            while (this.bot.inventory.slots[slot]?.type !== pearl.type) {
+                if (Date.now() - t0 > timeout) {
+                    ui.log(`${this.banner.bad} Timeout reached while equipping ${pearl.displayName} (#${pearl.type}/${pearl.metadata})`)
+                    return;
+                }
+                ui.log(`${this.banner.good} Equipping ${pearl.displayName} to off-hand...`);
                 await this.bot.equip(pearl, 'off-hand');
                 await this.bot.waitForTicks(2);
             }
@@ -263,63 +340,93 @@ module.exports = function attach(bot) {
             
             await this.bot.waitForTicks(1);
 
-            ui.log(`{green-fg}[pupa_inventory]{/} ${pearl.displayName} tossed successfully`);
+            ui.log(`${this.banner.good} Tossed ${pearl.displayName} successfully`);
             this.bot.deactivateItem();
         }
             
-        async equipWeapon() { // add axe support, (other tools?)
+        async equipWeapon() {
             const materialStats = {
-                wooden_sword: { damage: 4 },
-                stone_sword: { damage: 5 },
-                gold_sword: { damage: 4 },
-                iron_sword: { damage: 6 },
-                diamond_sword: { damage: 7 },
-                netherite_sword: { damage: 8 }
+                wooden_sword: { damage: 4, speed: 1.6 },
+                stone_sword: { damage: 5, speed: 1.6 },
+                gold_sword: { damage: 4, speed: 1.6 },
+                iron_sword: { damage: 6, speed: 1.6 },
+                diamond_sword: { damage: 7, speed: 1.6 },
+                netherite_sword: { damage: 8, speed: 1.6 },
+            
+                wooden_axe: { damage: 7, speed: 0.8 },
+                stone_axe: { damage: 9, speed: 0.8 },
+                gold_axe: { damage: 7, speed: 1.0 },
+                iron_axe: { damage: 9, speed: 0.9 },
+                diamond_axe: { damage: 9, speed: 1.0 },
+                netherite_axe: { damage: 10, speed: 1.0 },
+            
+                wooden_pickaxe: { damage: 2, speed: 1.2 },
+                stone_pickaxe: { damage: 3, speed: 1.2 },
+                gold_pickaxe: { damage: 2, speed: 1.2 },
+                iron_pickaxe: { damage: 4, speed: 1.2 },
+                diamond_pickaxe: { damage: 5, speed: 1.2 },
+                netherite_pickaxe: { damage: 6, speed: 1.2 },
+            
+                wooden_shovel: { damage: 2.5, speed: 1.0 },
+                stone_shovel: { damage: 3.5, speed: 1.0 },
+                gold_shovel: { damage: 2.5, speed: 1.0 },
+                iron_shovel: { damage: 4.5, speed: 1.0 },
+                diamond_shovel: { damage: 5.5, speed: 1.0 },
+                netherite_shovel: { damage: 6.5, speed: 1.0 },
+            
+                wooden_hoe: { damage: 1, speed: 1.0 },
+                stone_hoe: { damage: 1, speed: 2.0 },
+                gold_hoe: { damage: 1, speed: 1.0 },
+                iron_hoe: { damage: 1, speed: 3.0 },
+                diamond_hoe: { damage: 1, speed: 4.0 },
+                netherite_hoe: { damage: 1, speed: 6.0 }
             };
         
-            const swords = this.bot.inventory.items().filter(item => item.name.endsWith('_sword'));
-            if (swords.length === 0) return;
+            const weapons = this.bot.inventory.items().filter(item => 
+                item.name.endsWith('_sword') || 
+                item.name.endsWith('_axe') || 
+                item.name.endsWith('_pickaxe') || 
+                item.name.endsWith('_shovel') || 
+                item.name.endsWith('_hoe')
+            );
 
-            const sword = swords.reduce((best, sword) => {
-                const score = this._computeSwordScore(sword, materialStats);
-                return !best || score > this._computeSwordScore(best, materialStats) ? sword : best;
+            if (weapons.length === 0) return;
+        
+            const weapon = weapons.reduce((best, item) => {
+                const score = this._computeWeaponScore(item, materialStats);
+                return !best || score > this._computeWeaponScore(best, materialStats) ? item : best;
             }, null);
         
             const held = this.bot.heldItem;
-            if (held?.type === sword.type && held.metadata === sword.metadata && held.nbt === sword.nbt) return;
+            if (held?.type === weapon.type && held.metadata === weapon.metadata && held.nbt === weapon.nbt) return;
         
-            const currentScore = held ? this._computeSwordScore(held, materialStats) : -1;
-            if (this._computeSwordScore(sword, materialStats) <= currentScore) return;
-
-            if (this.bot.heldItem?.type !== sword.type || this.bot.heldItem.metadata !== sword.metadata || this.bot.heldItem.nbt !== sword.nbt) {
-                ui.log(`{green-fg}[pupa_inventory]{/} Equipping ${sword.displayName} (score: ${this._computeSwordScore(sword, materialStats)}) to hand...`);
-                await this.bot.equip(sword, 'hand');
-                await this.bot.waitForTicks(2);  // try catch this
+            const currentScore = held ? this._computeWeaponScore(held, materialStats) : -1;
+            if (this._computeWeaponScore(weapon, materialStats) <= currentScore) return;
+        
+            if (this.bot.heldItem?.type !== weapon.type || this.bot.heldItem.metadata !== weapon.metadata || this.bot.heldItem.nbt !== weapon.nbt) {
+                ui.log(`${this.banner.good} Equipping ${weapon.displayName} (#${weapon.type}) (DPS: ${this._computeWeaponScore(weapon, materialStats).toFixed(2)}) to hand...`);
+                await this.bot.equip(weapon, 'hand');
+                await this.bot.waitForTicks(2);
             }
         }
 
-        _computeSwordScore(item, materialStats) {
+        _computeWeaponScore(item, materialStats) {
             if (!item?.name) return -1;
         
             const stats = materialStats[item.name];
             if (!stats) return 0;
         
-            let sharpnessLVL = 0;
-            let enchantWeight = 0;
+            const baseDPS = stats.damage * stats.speed;
         
+            let sharpnessBonus = 0;
             if (item.enchants && Array.isArray(item.enchants)) {
                 const sharpness = item.enchants.find(e => e.name === 'sharpness');
-                sharpnessLVL = sharpness ? (sharpness.lvl || 0) : 0;
-            
-                const nonSharpness = item.enchants.filter(e => e.name !== 'sharpness');
-                const vanishing = nonSharpness.some(e => e.name === 'vanishing_curse');
-            
-                const usefulEnchants = nonSharpness.filter(e => e.name !== 'vanishing_curse');
-                enchantWeight = usefulEnchants.length * 0.1;
-            
-                if (vanishing) enchantWeight -= 0.1;
+                if (sharpness) {
+                    sharpnessBonus = (sharpness.lvl || 0) * 1.25 * stats.speed;
+                }
             }
-            return stats.damage + (sharpnessLVL * 1.25) + enchantWeight;
+        
+            return baseDPS + sharpnessBonus;
         }
 
         async equipUtility() {
@@ -334,9 +441,8 @@ module.exports = function attach(bot) {
             const slot = this.bot.getEquipmentDestSlot('off-hand');
             const offHand = this.bot.inventory.slots[slot];
 
-            if (!offHand || offHand.type !== gapple.type && offHand.metadata !== gapple.metadata) {
-                ui.log(offHand)
-                ui.log(`{green-fg}[pupa_inventory]{/} Equipping ${gapple.displayName} to off-hand...`);
+            if (!offHand || offHand.type === gapple.type && offHand.metadata !== gapple.metadata) {//|| offHand.type !== gapple.type && offHand.metadata !== gapple.metadata) {
+                ui.log(`${this.banner.good} Equipping utility ${gapple.displayName} (#${gapple.type}/${gapple.metadata}) to off-hand...`);
                 await this.bot.equip(gapple, 'off-hand');
                 await this.bot.waitForTicks(2);
             }

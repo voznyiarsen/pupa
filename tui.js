@@ -13,23 +13,15 @@ const createTerminalUI = () => {
     dockBorders: true
   });
 
-  const grid = new contrib.grid({ rows: 1, cols: 1, screen: screen });
-  
+  const grid = new contrib.grid({ rows: 1, cols: 1, screen });
   const logBox = grid.set(0, 0, 0.75, 1, blessed.log, {
     label: ' Log ',
     tags: true,
     scrollable: true,
     alwaysScroll: true,
-    scrollbar: {
-      ch: '▓',
-      track: { bg: 'grey' },
-      style: { bg: 'lightblue' }
-    },
+    scrollbar: { ch: '▓', track: { bg: 'grey' }, style: { bg: 'lightblue' } },
     border: { type: 'line', fg: 'blue' },
-    style: { 
-      fg: 'white',
-      border: { fg: '#f0f0f0' }
-    }
+    style: { fg: 'white', border: { fg: '#f0f0f0' } }
   });
 
   const inputBox = grid.set(0, 0, 0.25, 1, blessed.textbox, {
@@ -39,12 +31,7 @@ const createTerminalUI = () => {
     label: ' Input ',
     inputOnFocus: true,
     border: { type: 'line', fg: 'green' },
-    style: {
-      fg: 'yellow',
-      bg: 'black',
-      focus: { bg: '#333333' },
-      border: { fg: '#a0a0a0' }
-    }
+    style: { fg: 'yellow', bg: 'black', focus: { bg: '#333333' }, border: { fg: '#a0a0a0' } }
   });
 
   logBox.add('{bold}Terminal UI Initialized{/bold}');
@@ -56,10 +43,8 @@ const createTerminalUI = () => {
 
   const inputCallbacks = [];
   inputBox.on('submit', text => {
-    const timestamp = new Date().toLocaleTimeString();
-    const formatted = `{cyan-fg}[${timestamp}]{/} ${text}`;
-    
-    logBox.add(formatted);
+    const timestamp = new Date().toISOString().substring(11, 19);
+    logBox.add(`{cyan-fg}[${timestamp}]{/} ${text}`);
     inputCallbacks.forEach(cb => cb(text));
     inputBox.clearValue();
     inputBox.focus();
@@ -71,20 +56,13 @@ const createTerminalUI = () => {
     screen.render();
   });
 
-  screen.key(['up', 'down', 'pageup', 'pagedown'], (ch, key) => {
+  screen.key(['up', 'down', 'pageup', 'pagedown'], (_, key) => {
+    const h = logBox.height - 2;
     switch (key.name) {
-      case 'up':
-        logBox.scroll(-1);
-        break;
-      case 'down':
-        logBox.scroll(1);
-        break;
-      case 'pageup':
-        logBox.scroll(-(logBox.height - 2));
-        break;
-      case 'pagedown':
-        logBox.scroll(logBox.height - 2);
-        break;
+      case 'up': logBox.scroll(-1); break;
+      case 'down': logBox.scroll(1); break;
+      case 'pageup': logBox.scroll(-h); break;
+      case 'pagedown': logBox.scroll(h); break;
     }
     screen.render();
   });
@@ -96,39 +74,41 @@ const createTerminalUI = () => {
 
   screen.key(['C-c', 'escape'], () => process.exit(0));
 
-  screen.on('resize', () => {
+  const resize = () => {
     logBox.height = Math.max(3, Math.floor(screen.height * 0.75));
     inputBox.height = 3;
     inputBox.top = screen.height - 3;
     screen.render();
-  });
+  };
+  screen.on('resize', resize);
+  resize();
 
-  logBox.height = Math.max(3, Math.floor(screen.height * 0.75));
-  inputBox.height = 3;
-  inputBox.top = screen.height - 3;
   inputBox.focus();
   screen.render();
 
-  uiInstance = {
-    log: (...args) => {
-      const content = args.map(arg => 
+  return uiInstance = {
+    log(...args) {
+      const content = args.map(arg =>
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
       ).join(' ');
-      logBox.log(content);
+      const timestamp = new Date().toISOString().substring(11, 19)
+      logBox.log(`{cyan-fg}[${timestamp}]{/} ${content}`);
       screen.render();
     },
-    onInput: (callback) => {
-      inputCallbacks.push(callback);
+    onInput(cb) {
+      inputCallbacks.push(cb);
     },
-    getHistory: () => logBox.getText().split('\n'),
-    getScrollPosition: () => logBox.getScroll(),
-    destroy: () => {
+    getHistory() {
+      return logBox.getText().split('\n');
+    },
+    getScrollPosition() {
+      return logBox.getScroll();
+    },
+    destroy() {
       screen.destroy();
       uiInstance = null;
     }
   };
-
-  return uiInstance;
 };
 
 module.exports = createTerminalUI;
