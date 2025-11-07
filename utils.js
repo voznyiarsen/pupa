@@ -2,10 +2,12 @@ const { Vec3 } = require('vec3');
 
 module.exports = function attach(bot) {
     class pupa_utils {
+        recentPoints = [];
+        recentPointsMax = 1;
+
         constructor(bot) {
             this.bot = bot;
-            this.recentPoints = [];
-            this.recentPointsMax = 1;
+
         }
         /*  START      
             ITEMS
@@ -117,31 +119,25 @@ module.exports = function attach(bot) {
         // PS: no?
         //
         isSubInLiquid(source, height = 1.8, width = 0.6) {
-            const liquids = new Set();
-            liquids.add(this.bot.registry.blocksByName.water.id);
-            liquids.add(this.bot.registry.blocksByName.lava.id);
+            const liquids = new Set([this.bot.registry.blocksByName.water.id,this.bot.registry.blocksByName.lava.id]);
+
             for (let x of [-width/2, width/2]) {
                 for (let z of [-width/2, width/2]) {
                     const block = this.bot.blockAt(new Vec3(source.x + x, source.y + height, source.z + z));
-                    if (block && liquids.has(block.id)) {
-                        return true;
-                    }
+                    if (block && liquids.has(block.id)) return true;
                 }
             }
             return false;
         }
 
         isInLiquid(source, height = 1.8, width = 0.6) {
-            const liquids = new Set();
-            liquids.add(this.bot.registry.blocksByName.water.id);
-            liquids.add(this.bot.registry.blocksByName.lava.id);
+            const liquids = new Set([this.bot.registry.blocksByName.water.id,this.bot.registry.blocksByName.lava.id]);
+
             for (let x of [-width/2, width/2]) {
                 for (let z of [-width/2, width/2]) {
                     for (let y of [0, height/2, height]) {
                         const block = this.bot.blockAt(new Vec3(source.x + x, source.y + y, source.z + z));
-                        if (block && liquids.has(block.id)) {
-                            return true;
-                        }
+                        if (block && liquids.has(block.id)) return true;
                     }
                 }
             }
@@ -192,25 +188,99 @@ module.exports = function attach(bot) {
             }
             return null;
         }
+/// func todo: line draw collision check 
+/// line draw col check -1 y
+///
+// check a box line 0.6 wide 1.8 tall
 
-        getSolidBlocks(source) {
+        drawRectColLine(source, target) {
+            const direction = new Vec3(
+                target.x - source.x,
+                target.y - source.y,
+                target.z - source.z
+            );
+            const length = Math.sqrt(direction.x ** 2 + direction.y ** 2 + direction.z ** 2);
+            const segments = Math.ceil(length / 0.6);
+            const step = new Vec3(
+                direction.x / segments,
+                direction.y / segments,
+                direction.z / segments
+            );
+        
+            for (let i = 0; i <= segments; i++) {
+                const base = new Vec3(
+                    source.x + step.x * i,
+                    source.y + step.y * i,
+                    source.z + step.z * i
+                );
+            
+                const heights = [0, 0.6, 1.2, 1.8];
+                for (const dy of heights) {
+                    const y = base.y + dy;
+
+                    const offsets = [
+                        new Vec3(-0.3, y, -0.3),
+                        new Vec3( 0.3, y, -0.3),
+                        new Vec3(-0.3, y,  0.3),
+                        new Vec3( 0.3, y,  0.3)
+                    ];
+                    for (const offset of offsets) {
+                        const point = new Vec3(base.x + offset.x, offset.y, base.z + offset.z);
+                        const block = this.bot.blockAt(point);
+                        if (block && block.boundingBox !== 'empty') return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        drawFlatColLine(source, target) {
+            const direction = new Vec3(
+                target.x - source.x,
+                target.y - source.y,
+                target.z - source.z
+            );
+            const length = Math.sqrt(direction.x ** 2 + direction.y ** 2 + direction.z ** 2);
+            const segments = Math.ceil(length / 0.6);
+            const step =  new Vec3(
+                direction.x / segments,
+                direction.y / segments,
+                direction.z / segments
+            );
+
+            for (let i = 0; i <= segments; i++) {
+                const point = new Vec3(
+                source.x + step.x * i,
+                source.y + step.y * i,
+                source.z + step.z * i
+                );
+                const block = this.bot.blockAt(point);
+                if (block && block.boundingBox !== 'empty') return true;
+            }
+            return false;
+        }
+
+        getSolidBlocks(source) { // avoid picking blocks behind walls, use flat col line 1st, rect col line next
             const solids = [];
-            const radius = 3; // [-3, -2, -1, 0, 1, 2, 3]
-            // get blocks without blocks 1...3 high up (todo
+            const radius = 3;
+        
             for (let xOffset = -radius; xOffset <= radius; xOffset++) {
                 for (let zOffset = -radius; zOffset <= radius; zOffset++) {
                     const startY = Math.floor(source.y);
                     for (let y = startY; y >= startY - 1; y--) {
                         const block = this.bot.blockAt(new Vec3(source.x + xOffset, y, source.z + zOffset));
-                        const shape = block.shapes[0];
-                    
-                        if (!block || !shape || block.boundingBox === 'empty') {
+                        const blockAbove = this.bot.blockAt(new Vec3(source.x + xOffset, y + 1, source.z + zOffset));
+
+                        if (!block || block.boundingBox === 'empty' || (blockAbove && blockAbove.boundingBox !== 'empty')) {
                             continue;
                         }
+
+                        const shape = block.shapes[0];
+                        if (!shape) continue;
                     
                         const dx = Math.abs(shape[0] - shape[3]);
                         const dz = Math.abs(shape[2] - shape[5]);
-                        
+
                         if (dx > this.bot.entity.width && dz > this.bot.entity.width) {
                             const yOffset = Math.abs(shape[1] - shape[4]);
                             solids.push(block.position.offset(0.5, yOffset, 0.5));

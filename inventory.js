@@ -5,9 +5,10 @@ const Item = require('prismarine-item')('1.12.2');
 
 module.exports = function attach(bot) {
     class pupa_inventory {
+        banner = { good: `{green-fg}[inventory]{/}`, bad: `{red-fg}[inventory]{/}` };
+        
         constructor(bot) {
             this.bot = bot;
-            this.banner = { good: `{green-fg}[inventory]{/}`, bad: `{red-fg}[inventory]{/}` };
         }
 
         async clearInventory() {

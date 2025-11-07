@@ -11,6 +11,7 @@ module.exports = function attach(bot) {
         strafePoint = null;
         lastDist = null;
         mode = 2;
+        banner = { good: `{green-fg}[combat]{/}`, bad: `{red-fg}[combat]{/}`}
 
         constructor(bot) {
             this.bot = bot;
@@ -45,7 +46,8 @@ module.exports = function attach(bot) {
 
         doDecide = async () => {
             this.updateTarget();
-            if (this.bot.pvp.target) this.doStrafe();
+            if (this.bot.pvp.target) await this.doStrafe();
+            this.doAvoid();
             if (this.debounce) return;
             this.debounce = true;
 
@@ -132,7 +134,7 @@ module.exports = function attach(bot) {
             for (const id of junk) {
                 const item = this.bot.inventory.findInventoryItem(id, null);
                 if (item) {
-                    ui.log(`{green-fg}[pupa_inventory]{/} Tossing ${item.name} x${item.count}...`);
+                    ui.log(`${this.banner.good} Tossing ${item.name} x${item.count}...`);
                     await this.bot.toss(item.type, item.metadata, item.count);
                     await this.bot.waitForTicks(2);
                     break;
@@ -159,7 +161,7 @@ module.exports = function attach(bot) {
             target ? this.bot.pvp.attack(target) : this.bot.pvp.forceStop();
         };
 
-        doStrafe = () => {
+        doStrafe = async () => {
             const { position: source } = this.bot.entity;
             const target = this.bot.pvp?.target?.position;
             if (!source || !target) return;
@@ -172,16 +174,20 @@ module.exports = function attach(bot) {
                     const velocity = this.bot.pupa_utils.getJumpVelocity(source, this.strafePoint);
                     if (velocity) {
                         this.bot.entity.velocity.set(0, 0, 0);
+                        await this.bot.waitForTicks(1);
                         this.bot.entity.velocity.set(...Object.values(velocity));
                     }
                 }
             }
-
+        
             if (!this.bot.entity.onGround && this.strafePoint) {
                 const dist = dist2D(source, this.strafePoint);
-                if (dist < 0.5 && dist > (this.lastDist ?? -1)) {
-                    const velocity = this.bot.pupa_utils.getFlatVelocity(source, this.strafePoint, 0, 0.05);
-                    this.bot.entity.velocity.set(...Object.values(velocity));
+                if (dist < 1) {
+                    if (this.lastDist !== undefined && dist > this.lastDist) {
+                        ui.log(`${this.banner.good} Applying velocity towards ${this.strafePoint} from ${source}`)
+                        const velocity = this.bot.pupa_utils.getFlatVelocity(source, this.strafePoint, 0, 0.05);
+                        this.bot.entity.velocity.set(...Object.values(velocity));
+                    }
                 }
                 this.lastDist = dist;
             }
